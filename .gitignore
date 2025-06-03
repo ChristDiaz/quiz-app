@@ -1,0 +1,46 @@
+# ===================
+# Node Dependencies
+# ===================
+client/node_modules/
+server/node_modules/
+
+# ================
+# Logs
+# ================
+logs
+.log
+npm-debug.log
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ========================
+# Environment Variables
+# ========================
+client/.env
+server/.env
+.env
+
+# ====================
+# Build Output
+# ====================
+client/dist/
+server/dist/
+dist/
+dist-ssr/
+.local
+
+# ==========================
+# Editor + System Files
+# ==========================
+.vscode/
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.suo
+.ntvs
+*.njsproj
+*.sln
+*.sw?
