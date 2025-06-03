@@ -1,4 +1,3 @@
-// /home/christian/gpt-quiz-app/client/src/pages/Login.jsx
 import { useState } from 'react';
 import { Link, useNavigate, Navigate } from 'react-router-dom';
 import { LogIn } from 'lucide-react';
@@ -9,8 +8,12 @@ function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { login, isLoggedIn } = useAuth();
+  const { login, isLoggedIn, authLoading } = useAuth();
   const navigate = useNavigate();
+
+  if (authLoading) {
+    return <div>Loading...</div>;
+  }
 
   if (isLoggedIn) {
     return <Navigate to="/dashboard" replace />;
@@ -23,11 +26,15 @@ function Login() {
 
     try {
       await login(email, password);
-      console.log('Login successful');
     } catch (err) {
-      console.error("Login failed:", err);
-      const errorMessage = err.response?.data?.message || err.message || 'Login failed. Please check your credentials.';
+      let errorMessage = 'Login failed. Please check your credentials.';
+      if (err.response && err.response.data && err.response.data.message) {
+        errorMessage = err.response.data.message;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
       setError(errorMessage);
+    } finally {
       setIsLoading(false);
     }
   };
@@ -54,11 +61,6 @@ function Login() {
             </div>
             <form onSubmit={handleSubmit} className="space-y-4">
               <h2 className="text-xl font-semibold text-center text-gray-700 mb-5">Log In to Your Account</h2>
-              {error && (
-                <div className="mb-4 p-3 rounded bg-red-100 text-red-700 text-sm border border-red-300 text-center">
-                  {error}
-                </div>
-              )}
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
                 <input
@@ -84,6 +86,11 @@ function Login() {
                   placeholder="••••••••"
                   disabled={isLoading}
                 />
+                {error && (
+                  <div className="mt-2 p-2 rounded bg-red-100 text-red-700 text-sm border border-red-300 text-center">
+                    {error}
+                  </div>
+                )}
               </div>
               <div className="pt-2">
                 <button
