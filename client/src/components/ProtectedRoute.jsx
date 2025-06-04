@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 
 function ProtectedRoute() {
   // Get BOTH isLoggedIn and the loading state from context
-  const { isLoggedIn, isLoading: isAuthLoading } = useAuth();
+  const { isLoggedIn, authLoading: isAuthLoading } = useAuth();
 
   // If authentication status is still being determined, show a loading indicator
   if (isAuthLoading) {
