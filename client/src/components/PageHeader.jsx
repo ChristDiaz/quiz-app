@@ -1,4 +1,4 @@
-// /home/christian/gpt-quiz-app/client/src/components/PageHeader.jsx
+// Displays a styled page header across the application.
 import React from 'react';
 import PropTypes from 'prop-types'; // Optional, but recommended for prop validation
 

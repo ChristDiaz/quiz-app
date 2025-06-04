@@ -1,4 +1,4 @@
-// /home/christian/gpt-quiz-app/client/src/pages/MyAttempts.jsx
+// Page showing the user's previous quiz attempts.
 import { useState, useEffect } from 'react';
 import { apiClient } from '../context/AuthContext'; // Use apiClient
 import PageHeader from '../components/PageHeader';
