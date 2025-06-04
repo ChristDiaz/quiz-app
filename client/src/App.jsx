@@ -36,7 +36,7 @@ function App() {
   const navigate = useNavigate();
 
   // Use the Auth context
-  const { isLoggedIn, logout, isLoading: isAuthLoading } = useAuth();
+  const { isLoggedIn, logout, authLoading: isAuthLoading } = useAuth();
 
   // Sidebar handlers (only relevant when logged in)
   const handleMouseEnter = () => {
