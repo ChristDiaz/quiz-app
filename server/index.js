@@ -21,8 +21,9 @@ app.use(helmet.contentSecurityPolicy({
     // Add other directives as needed, e.g., imgSrc, fontSrc
   }
 }));
-app.use(helmet.xContentTypeOptions()); // Sets X-Content-Type-Options: nosniff
-app.use(helmet.xFrameOptions({ action: 'deny' })); // Sets X-Frame-Options: DENY
+// Helmet 8 uses noSniff and frameguard instead of legacy middleware names
+app.use(helmet.noSniff()); // Sets X-Content-Type-Options: nosniff
+app.use(helmet.frameguard({ action: 'deny' })); // Sets X-Frame-Options: DENY
 
 const FRONTEND_URLS = [
   'http://10.10.10.2:5173', // Vite dev server
