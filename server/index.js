@@ -28,22 +28,21 @@ app.use(helmet.frameguard({ action: 'deny' })); // Sets X-Frame-Options: DENY
 const FRONTEND_URLS = [
   'http://10.10.10.2:5173', // Vite dev server
   'http://localhost:5173',  // Localhost dev server
-  process.env.FRONTEND_URL || 'http://10.10.10.2:3000' // Production or custom
+  process.env.FRONTEND_URL || 'http://10.10.10.2:3000', // Production or custom
+  'https://quizcraft.elatron.net', // Deployed frontend
+  'http://quizcraft.elatron.net' // HTTP variant of deployed frontend
 ];
 
-app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || FRONTEND_URLS.includes(origin)) {
-      return callback(null, true);
-    }
-    return callback(new Error('Not allowed by CORS'));
-  },
+const corsOptions = {
+  origin: FRONTEND_URLS,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
-}));
+};
 
-app.options('*', cors());
+app.use(cors(corsOptions));
+
+app.options('*', cors(corsOptions));
 
 app.use(express.json());
 
