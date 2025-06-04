@@ -1,4 +1,4 @@
-// /home/christian/gpt-quiz-app/client/src/pages/Signup.jsx
+// User registration page.
 import React, { useState } from 'react';
 import axios from 'axios';
 import { Link, useNavigate } from 'react-router-dom';

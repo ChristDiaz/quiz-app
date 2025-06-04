@@ -1,4 +1,4 @@
-// /home/christian/gpt-quiz-app/client/src/components/ProtectedRoute.jsx
+// Provides route protection by verifying authentication state.
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
