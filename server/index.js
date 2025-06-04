@@ -28,7 +28,8 @@ app.use(helmet.frameguard({ action: 'deny' })); // Sets X-Frame-Options: DENY
 const FRONTEND_URLS = [
   'http://10.10.10.2:5173', // Vite dev server
   'http://localhost:5173',  // Localhost dev server
-  process.env.FRONTEND_URL || 'http://10.10.10.2:3000' // Production or custom
+  process.env.FRONTEND_URL || 'http://10.10.10.2:3000', // Production or custom
+  'https://quizcraft.elatron.net' // Deployed frontend
 ];
 
 app.use(cors({
