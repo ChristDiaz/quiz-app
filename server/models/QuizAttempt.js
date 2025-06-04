@@ -1,4 +1,3 @@
-// /home/christian/gpt-quiz-app/server/models/QuizAttempt.js
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 

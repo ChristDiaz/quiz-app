@@ -1,4 +1,3 @@
-// /home/christian/gpt-quiz-app/server/middleware/authMiddleware.js
 const jwt = require('jsonwebtoken');
 
 // Load the secret key from environment variables

@@ -1,4 +1,3 @@
-// /home/christian/gpt-quiz-app/server/routes/quizAttempts.js
 const express = require('express');
 const router = express.Router();
 const QuizAttempt = require('../models/QuizAttempt'); // Adjust path if needed
