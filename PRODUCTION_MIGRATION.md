@@ -249,6 +249,78 @@ docker compose --env-file .env.production -f docker-compose.prod.yml exec -T mon
 - Rotate `JWT_SECRET` and database passwords periodically.
 - Keep OS and Docker patched on the production server.
 
+## 10. Post-Deploy Verification Checklist (Run After Every Release)
+
+Run this from the production server:
+
+```bash
+cd /opt/quiz-app
+docker compose --env-file .env.production -f docker-compose.prod.yml ps
+docker compose --env-file .env.production -f docker-compose.prod.yml logs --tail=100 caddy server client
+```
+
+Expected:
+
+- `caddy`, `client`, `server`, and `mongo` are `Up` (health checks passing for app services).
+- No repeated crash/restart loop in logs.
+- Caddy logs do not show repeated ACME failures.
+
+Run these from an external network (mobile data or remote shell):
+
+```bash
+curl -I http://quizcraft.elatron.net
+curl -vkI https://quizcraft.elatron.net
+```
+
+Expected:
+
+- HTTP returns `308` redirect to HTTPS.
+- HTTPS returns `200` (or app-specific status) with `Server: Caddy`.
+- TLS handshake succeeds and certificate matches your domain.
+
+Run these from your LAN (split DNS check):
+
+```bash
+nslookup quizcraft.elatron.net
+openssl s_client -connect quizcraft.elatron.net:443 -servername quizcraft.elatron.net </dev/null 2>/dev/null | \
+openssl x509 -noout -subject -issuer -dates -ext subjectAltName
+```
+
+Expected:
+
+- DNS resolves to your internal app host (example `10.10.10.101`).
+- Certificate SAN contains `DNS:quizcraft.elatron.net`.
+- Issuer is trusted (for example Let's Encrypt) and validity dates are current.
+
+Browser verification:
+
+- Open `https://quizcraft.elatron.net` in a private/incognito window.
+- Confirm no certificate warning.
+- Log in and test one end-to-end action (for example create and load a quiz).
+
+If browser still warns but CLI checks are valid:
+
+- Clear browser site data for the domain.
+- Clear HSTS for the domain in Chrome (`chrome://net-internals/#hsts`).
+- Flush local DNS cache and retry.
+
+If cert issuance fails after deploy:
+
+- Recheck pfSense NAT rules: `80 -> app:80`, `443 -> app:443`, `2222 -> app:22`.
+- Confirm pfSense GUI is not using WAN `443` (move GUI to `8443` or another port).
+- Restart caddy and recheck logs:
+
+```bash
+cd /opt/quiz-app
+docker compose --env-file .env.production -f docker-compose.prod.yml restart caddy
+docker compose --env-file .env.production -f docker-compose.prod.yml logs -f caddy
+```
+
+Release confidence gate:
+
+- Mark release complete only when all checks above pass.
+- If any check fails, rollback immediately using the prior `sha-...` image tag.
+
 ## Files Added for Production in This Repo
 
 - `docker-compose.prod.yml`

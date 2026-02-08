@@ -79,3 +79,34 @@ npm test
 - Tests updated or added when behavior changes.
 - Startup and build commands still work.
 - Docs updated if workflows or commands changed.
+
+## Production Quick Checklist
+
+Use this for fast release validation. Full runbook: `/Users/christiandiaz/Code/quiz-app/PRODUCTION_MIGRATION.md`.
+
+1. Validate locally:
+```bash
+cd /Users/christiandiaz/Code/quiz-app
+./start-dev.sh
+cd client && npm test && npm run build
+cd ../server && npm test
+```
+2. Merge to `main` only after CI is green.
+3. Confirm GitHub Actions `Release and Deploy` workflow succeeded.
+4. Verify production services:
+```bash
+cd /opt/quiz-app
+docker compose --env-file .env.production -f docker-compose.prod.yml ps
+docker compose --env-file .env.production -f docker-compose.prod.yml logs --tail=100 caddy server client
+```
+5. Verify public access:
+```bash
+curl -I http://quizcraft.elatron.net
+curl -vkI https://quizcraft.elatron.net
+```
+6. Verify LAN split-DNS + certificate:
+```bash
+nslookup quizcraft.elatron.net
+openssl s_client -connect quizcraft.elatron.net:443 -servername quizcraft.elatron.net </dev/null 2>/dev/null | openssl x509 -noout -subject -issuer -dates -ext subjectAltName
+```
+7. If any check fails, rollback to previous `sha-...` image tag and investigate with the full runbook.
