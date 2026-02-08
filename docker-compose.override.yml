@@ -22,4 +22,4 @@ services:
       - MONGO_URI=mongodb://mongo:27017/quizcraft
       - JWT_SECRET=${JWT_SECRET:-dev-inspection-secret}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4.1}

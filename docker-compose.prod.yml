@@ -48,7 +48,7 @@ services:
       - PORT=3000
       - JWT_SECRET=${JWT_SECRET}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4.1}
       - FRONTEND_URL=https://${APP_DOMAIN}
       - MONGO_URI=mongodb://${MONGO_APP_USER}:${MONGO_APP_PASSWORD}@mongo:27017/quizcraft?authSource=quizcraft
     healthcheck:

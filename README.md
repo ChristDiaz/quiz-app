@@ -30,11 +30,12 @@ Default endpoints:
 ## AI Quiz Generation Setup
 
 The document-to-quiz flow in `Create Quiz` requires OpenAI credentials on the server.
+PDF uploads use OpenAI's native file input path for better content understanding.
 
 Set these environment variables before starting the backend:
 
 - `OPENAI_API_KEY` (required)
-- `OPENAI_MODEL` (optional, defaults to `gpt-4o-mini`)
+- `OPENAI_MODEL` (optional, defaults to `gpt-4.1`)
 
 ## Production Quick Checklist
 

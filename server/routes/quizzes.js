@@ -45,6 +45,16 @@ const uploadDocument = (req, res, next) => {
   });
 };
 
+const isPdfUpload = (file) => {
+  if (!file) {
+    return false;
+  }
+
+  const mimeType = (file.mimetype || '').toLowerCase();
+  const fileName = (file.originalname || '').toLowerCase();
+  return mimeType === 'application/pdf' || fileName.endsWith('.pdf');
+};
+
 // POST /api/quizzes - Create a new quiz
 router.post(
   '/',
@@ -123,15 +133,22 @@ router.post(
         });
       }
 
-      const documentText = await extractTextFromDocument(req.file);
-      if (!documentText || !documentText.trim()) {
-        return res.status(400).json({ message: 'The uploaded document does not contain readable text.' });
+      const isPdfDocument = isPdfUpload(req.file);
+      let documentText = '';
+
+      if (!isPdfDocument) {
+        documentText = await extractTextFromDocument(req.file);
+        if (!documentText || !documentText.trim()) {
+          return res.status(400).json({ message: 'The uploaded document does not contain readable text.' });
+        }
       }
 
       const generationResult = await generateQuizFromDocument({
         documentText,
         questionCount: rawQuestionCount,
         fileName: req.file.originalname,
+        documentBuffer: req.file.buffer,
+        mimeType: req.file.mimetype,
       });
 
       return res.status(200).json({
@@ -140,6 +157,7 @@ router.post(
         metadata: {
           model: generationResult.model,
           wasSourceTruncated: generationResult.wasSourceTruncated,
+          usedPdfInput: generationResult.usedPdfInput,
         },
       });
     } catch (error) {

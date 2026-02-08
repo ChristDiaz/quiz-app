@@ -154,4 +154,39 @@ describe('POST /api/quizzes/generate-from-document', () => {
     expect(res.body.quiz.title).toBe('Fallback Quiz');
     expect(global.fetch).toHaveBeenCalledTimes(2);
   });
+
+  it('uses OpenAI responses API for PDF uploads', async () => {
+    global.fetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: jest.fn().mockResolvedValue({
+        output_text: JSON.stringify({
+          title: 'PDF Quiz',
+          description: 'Generated from pdf input',
+          questions: [
+            {
+              questionType: 'multiple-choice',
+              questionText: 'What is photosynthesis?',
+              options: ['A chemical process in plants', 'A planet', 'A type of rock', 'A language'],
+              correctAnswer: 'A chemical process in plants',
+            },
+          ],
+        }),
+      }),
+    });
+
+    const res = await request(app)
+      .post('/api/quizzes/generate-from-document')
+      .set('Authorization', `Bearer ${buildToken()}`)
+      .field('questionCount', '1')
+      .attach('document', Buffer.from('%PDF-1.4 fake pdf bytes'), 'chapter-1.pdf');
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.metadata).toEqual(
+      expect.objectContaining({
+        usedPdfInput: true,
+      })
+    );
+    expect(global.fetch.mock.calls[0][0]).toContain('/v1/responses');
+  });
 });
