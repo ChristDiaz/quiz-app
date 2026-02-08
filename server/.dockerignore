@@ -1,0 +1,8 @@
+node_modules
+coverage
+.git
+.gitignore
+Dockerfile.dev
+*.log
+tests
+

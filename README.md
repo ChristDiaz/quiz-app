@@ -13,6 +13,7 @@ Monorepo for the Quiz App frontend and backend.
 - Project-wide rules: [AGENTS.md](./AGENTS.md)
 - Frontend rules: [client/AGENTS.md](./client/AGENTS.md)
 - Backend rules: [server/AGENTS.md](./server/AGENTS.md)
+- Production migration guide: [PRODUCTION_MIGRATION.md](./PRODUCTION_MIGRATION.md)
 
 ## Quick Start
 

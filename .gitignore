@@ -21,6 +21,7 @@ lerna-debug.log*
 client/.env
 server/.env
 .env
+.env.production
 
 # ====================
 # Build Output
@@ -44,3 +45,10 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
+
+# ====================
+# Test / Backup Output
+# ====================
+test-results/
+playwright-report/
+backups/

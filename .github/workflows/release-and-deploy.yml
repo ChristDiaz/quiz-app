@@ -1,0 +1,177 @@
+name: Release and Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Optional image tag for deploy (example: sha-<commit>). Leave empty to deploy current commit tag."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  test-client:
+    name: Client Tests and Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  test-server:
+    name: Server Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+  build-and-push:
+    name: Build and Push Images
+    runs-on: ubuntu-latest
+    needs:
+      - test-client
+      - test-server
+    strategy:
+      matrix:
+        service: [client, server]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set image namespace
+        id: vars
+        run: |
+          echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ steps.vars.outputs.owner }}/quiz-app-${{ matrix.service }}
+          tags: |
+            type=raw,value=main
+            type=sha,prefix=sha-
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.service }}
+          file: ./${{ matrix.service }}/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs:
+      - build-and-push
+    environment: production
+    if: ${{ secrets.PROD_SSH_HOST != '' && secrets.PROD_SSH_USER != '' && secrets.PROD_SSH_KEY != '' && secrets.PROD_APP_DIR != '' }}
+    env:
+      PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+      PROD_SSH_USER: ${{ secrets.PROD_SSH_USER }}
+      PROD_SSH_PORT: ${{ secrets.PROD_SSH_PORT }}
+      PROD_SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
+      PROD_APP_DIR: ${{ secrets.PROD_APP_DIR }}
+      GHCR_PAT: ${{ secrets.GHCR_PAT }}
+      GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+      INPUT_IMAGE_TAG: ${{ github.event.inputs.image_tag || '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare SSH
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$PROD_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          SSH_PORT="${PROD_SSH_PORT:-22}"
+          ssh-keyscan -p "$SSH_PORT" "$PROD_SSH_HOST" >> ~/.ssh/known_hosts
+
+      - name: Copy deployment assets
+        run: |
+          set -euo pipefail
+          SSH_PORT="${PROD_SSH_PORT:-22}"
+          ssh -p "$SSH_PORT" "$PROD_SSH_USER@$PROD_SSH_HOST" "mkdir -p '$PROD_APP_DIR/scripts' '$PROD_APP_DIR/mongo'"
+          scp -P "$SSH_PORT" docker-compose.prod.yml Caddyfile .env.production.example "$PROD_SSH_USER@$PROD_SSH_HOST:$PROD_APP_DIR/"
+          scp -P "$SSH_PORT" scripts/deploy-production.sh scripts/backup-mongo.sh "$PROD_SSH_USER@$PROD_SSH_HOST:$PROD_APP_DIR/scripts/"
+          scp -P "$SSH_PORT" mongo/init-user.js "$PROD_SSH_USER@$PROD_SSH_HOST:$PROD_APP_DIR/mongo/"
+
+      - name: Optional GHCR login on server
+        if: ${{ env.GHCR_PAT != '' }}
+        run: |
+          set -euo pipefail
+          SSH_PORT="${PROD_SSH_PORT:-22}"
+          GHCR_USER="${GHCR_USERNAME:-${GITHUB_REPOSITORY_OWNER}}"
+          printf '%s' "$GHCR_PAT" | ssh -p "$SSH_PORT" "$PROD_SSH_USER@$PROD_SSH_HOST" "docker login ghcr.io -u '$GHCR_USER' --password-stdin"
+
+      - name: Deploy stack
+        run: |
+          set -euo pipefail
+          SSH_PORT="${PROD_SSH_PORT:-22}"
+          DEPLOY_TAG="sha-${GITHUB_SHA}"
+          if [ -n "${INPUT_IMAGE_TAG:-}" ]; then
+            DEPLOY_TAG="$INPUT_IMAGE_TAG"
+          fi
+          ssh -p "$SSH_PORT" "$PROD_SSH_USER@$PROD_SSH_HOST" "set -euo pipefail; cd '$PROD_APP_DIR'; test -f .env.production; chmod +x scripts/deploy-production.sh scripts/backup-mongo.sh; IMAGE_TAG='$DEPLOY_TAG' ./scripts/deploy-production.sh"
