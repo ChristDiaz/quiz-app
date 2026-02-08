@@ -88,11 +88,12 @@ describe('POST /api/quizzes/generate-from-document', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it('returns 502 when OpenAI request fails', async () => {
+  it('returns 502 with auth guidance when OpenAI credentials are invalid', async () => {
     global.fetch.mockResolvedValue({
       ok: false,
+      status: 401,
       json: jest.fn().mockResolvedValue({
-        error: { message: 'upstream request failed' },
+        error: { message: 'Incorrect API key provided.' },
       }),
     });
 
@@ -105,8 +106,52 @@ describe('POST /api/quizzes/generate-from-document', () => {
     expect(res.statusCode).toBe(502);
     expect(res.body).toEqual(
       expect.objectContaining({
-        message: 'Failed to generate quiz from document. Please try again.',
+        message: 'OpenAI authentication failed. Check OPENAI_API_KEY.',
       })
     );
+  });
+
+  it('retries without json_schema when model does not support strict response format', async () => {
+    global.fetch
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        json: jest.fn().mockResolvedValue({
+          error: { message: 'response_format json_schema is not supported for this model' },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: jest.fn().mockResolvedValue({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  title: 'Fallback Quiz',
+                  description: 'Generated with fallback mode.',
+                  questions: [
+                    {
+                      questionType: 'true-false',
+                      questionText: 'Earth has one moon.',
+                      correctAnswer: 'True',
+                    },
+                  ],
+                }),
+              },
+            },
+          ],
+        }),
+      });
+
+    const res = await request(app)
+      .post('/api/quizzes/generate-from-document')
+      .set('Authorization', `Bearer ${buildToken()}`)
+      .field('questionCount', '1')
+      .attach('document', Buffer.from('Earth has one moon.'), 'notes.txt');
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.quiz.title).toBe('Fallback Quiz');
+    expect(global.fetch).toHaveBeenCalledTimes(2);
   });
 });

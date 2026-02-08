@@ -89,6 +89,139 @@ function buildOpenAiPayload({ sourceText, questionCount, fileName, model }) {
   };
 }
 
+function buildFallbackPayload({ sourceText, questionCount, fileName, model }) {
+  const fileLabel = cleanString(fileName) || 'uploaded-document';
+  const userPrompt = [
+    `Create exactly ${questionCount} quiz questions from the source text.`,
+    'Only use information present in the source text.',
+    'Return valid JSON only, with this exact shape:',
+    '{"title":"string","description":"string","questions":[{"questionType":"multiple-choice|true-false|fill-in-the-blank|image-based","questionText":"string","options":["string"],"correctAnswer":"string","imageUrl":"string"}]}',
+    'For true-false questions, correctAnswer must be exactly "True" or "False".',
+    'For multiple-choice and image-based questions, include 2 to 6 options and ensure correctAnswer matches one option exactly.',
+    `Source file name: ${fileLabel}`,
+    'Source text:',
+    sourceText,
+  ].join('\n\n');
+
+  return {
+    model,
+    temperature: 0.2,
+    messages: [
+      {
+        role: 'system',
+        content: 'You create concise, high-quality quizzes and always return valid JSON.',
+      },
+      {
+        role: 'user',
+        content: userPrompt,
+      },
+    ],
+  };
+}
+
+function normalizeContentString(content) {
+  if (typeof content === 'string') {
+    return content;
+  }
+
+  if (Array.isArray(content)) {
+    return content
+      .map((item) => {
+        if (typeof item === 'string') {
+          return item;
+        }
+        if (item && typeof item.text === 'string') {
+          return item.text;
+        }
+        return '';
+      })
+      .join('\n')
+      .trim();
+  }
+
+  return '';
+}
+
+function parseJsonFromContent(content) {
+  const normalizedContent = normalizeContentString(content);
+  if (!normalizedContent) {
+    const error = new Error('OpenAI response did not include content.');
+    error.code = 'INVALID_OUTPUT';
+    throw error;
+  }
+
+  try {
+    return JSON.parse(normalizedContent);
+  } catch {
+    const firstBraceIndex = normalizedContent.indexOf('{');
+    const lastBraceIndex = normalizedContent.lastIndexOf('}');
+
+    if (firstBraceIndex >= 0 && lastBraceIndex > firstBraceIndex) {
+      const candidate = normalizedContent.slice(firstBraceIndex, lastBraceIndex + 1);
+      try {
+        return JSON.parse(candidate);
+      } catch {
+        // Continue to throw structured error below.
+      }
+    }
+
+    const error = new Error('OpenAI did not return valid JSON.');
+    error.code = 'INVALID_OUTPUT';
+    throw error;
+  }
+}
+
+function shouldRetryWithoutJsonSchema(error) {
+  if (error?.code !== 'UPSTREAM_REQUEST_FAILED' || error?.httpStatus !== 400) {
+    return false;
+  }
+
+  const message = cleanString(error.upstreamMessage || error.message).toLowerCase();
+  return (
+    message.includes('response_format') ||
+    message.includes('json_schema') ||
+    message.includes('unsupported') ||
+    message.includes('invalid schema')
+  );
+}
+
+async function requestOpenAi(payload, openAiApiKey) {
+  let openAiResponse;
+  try {
+    openAiResponse = await fetch(OPENAI_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${openAiApiKey}`,
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    const error = new Error('Unable to reach OpenAI API.');
+    error.code = 'UPSTREAM_NETWORK_ERROR';
+    throw error;
+  }
+
+  let responseBody = null;
+  try {
+    responseBody = await openAiResponse.json();
+  } catch {
+    responseBody = null;
+  }
+
+  if (!openAiResponse.ok) {
+    const upstreamMessage = cleanString(responseBody?.error?.message) || 'OpenAI request failed.';
+    const error = new Error(upstreamMessage);
+    error.code = 'UPSTREAM_REQUEST_FAILED';
+    error.httpStatus = openAiResponse.status;
+    error.upstreamMessage = upstreamMessage;
+    throw error;
+  }
+
+  const content = responseBody?.choices?.[0]?.message?.content;
+  return parseJsonFromContent(content);
+}
+
 function normalizeQuestionType(rawQuestionType) {
   const questionType = cleanString(rawQuestionType).toLowerCase();
 
@@ -268,57 +401,28 @@ async function generateQuizFromDocument({ documentText, questionCount, fileName 
   const boundedQuestionCount = clampQuestionCount(questionCount);
   const truncatedSourceText = sourceText.slice(0, MAX_SOURCE_CHARACTERS);
   const model = cleanString(process.env.OPENAI_MODEL) || DEFAULT_OPENAI_MODEL;
-  const payload = buildOpenAiPayload({
+  const strictPayload = buildOpenAiPayload({
     sourceText: truncatedSourceText,
     questionCount: boundedQuestionCount,
     fileName,
     model,
   });
 
-  let openAiResponse;
-  try {
-    openAiResponse = await fetch(OPENAI_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${openAiApiKey}`,
-      },
-      body: JSON.stringify(payload),
-    });
-  } catch (networkError) {
-    const error = new Error('Unable to reach OpenAI API.');
-    error.code = 'UPSTREAM_NETWORK_ERROR';
-    throw error;
-  }
-
-  let responseBody = null;
-  try {
-    responseBody = await openAiResponse.json();
-  } catch {
-    responseBody = null;
-  }
-
-  if (!openAiResponse.ok) {
-    const upstreamMessage = responseBody?.error?.message;
-    const error = new Error(upstreamMessage || 'OpenAI request failed.');
-    error.code = 'UPSTREAM_REQUEST_FAILED';
-    throw error;
-  }
-
-  const content = responseBody?.choices?.[0]?.message?.content;
-  if (typeof content !== 'string') {
-    const error = new Error('OpenAI response format was invalid.');
-    error.code = 'INVALID_OUTPUT';
-    throw error;
-  }
-
   let rawQuiz;
   try {
-    rawQuiz = JSON.parse(content);
-  } catch {
-    const error = new Error('OpenAI did not return valid JSON.');
-    error.code = 'INVALID_OUTPUT';
-    throw error;
+    rawQuiz = await requestOpenAi(strictPayload, openAiApiKey);
+  } catch (error) {
+    if (!shouldRetryWithoutJsonSchema(error)) {
+      throw error;
+    }
+
+    const fallbackPayload = buildFallbackPayload({
+      sourceText: truncatedSourceText,
+      questionCount: boundedQuestionCount,
+      fileName,
+      model,
+    });
+    rawQuiz = await requestOpenAi(fallbackPayload, openAiApiKey);
   }
 
   const quiz = sanitizeGeneratedQuiz(rawQuiz, boundedQuestionCount);

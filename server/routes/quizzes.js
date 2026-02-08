@@ -151,12 +151,39 @@ router.post(
         return res.status(500).json({ message: 'Server is missing OpenAI configuration.' });
       }
 
-      if (
-        error.code === 'UPSTREAM_REQUEST_FAILED' ||
-        error.code === 'UPSTREAM_NETWORK_ERROR' ||
-        error.code === 'INVALID_OUTPUT'
-      ) {
-        return res.status(502).json({ message: 'Failed to generate quiz from document. Please try again.' });
+      if (error.code === 'UPSTREAM_NETWORK_ERROR') {
+        console.error('OpenAI network error while generating quiz:', error.message);
+        return res.status(502).json({ message: 'Could not reach OpenAI. Please try again in a moment.' });
+      }
+
+      if (error.code === 'UPSTREAM_REQUEST_FAILED') {
+        console.error('OpenAI request failed while generating quiz:', {
+          status: error.httpStatus,
+          message: error.upstreamMessage || error.message,
+        });
+
+        if (error.httpStatus === 401 || error.httpStatus === 403) {
+          return res.status(502).json({ message: 'OpenAI authentication failed. Check OPENAI_API_KEY.' });
+        }
+
+        if (error.httpStatus === 429) {
+          return res.status(502).json({ message: 'OpenAI rate limit or quota reached. Try again later.' });
+        }
+
+        if (error.httpStatus === 400) {
+          return res.status(502).json({
+            message: `OpenAI rejected the generation request: ${error.upstreamMessage || 'Invalid request.'}`,
+          });
+        }
+
+        return res.status(502).json({ message: 'OpenAI failed to generate quiz content. Please try again.' });
+      }
+
+      if (error.code === 'INVALID_OUTPUT') {
+        console.error('OpenAI returned invalid output while generating quiz:', error.message);
+        return res.status(502).json({
+          message: 'OpenAI returned unexpected output. Try again or change OPENAI_MODEL.',
+        });
       }
 
       console.error('Error generating quiz from document:', error);
