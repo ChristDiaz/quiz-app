@@ -3,7 +3,10 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
 import PageHeader from '../components/PageHeader';
-import { getMissingPasswordRequirements } from '../utils/passwordPolicy';
+import {
+  getMissingPasswordRequirements,
+  getPasswordRequirementStatus
+} from '../utils/passwordPolicy';
 
 function Signup() {
   const [username, setUsername] = useState('');
@@ -12,8 +15,10 @@ function Signup() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [passwordMissingRequirements, setPasswordMissingRequirements] = useState([]);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const passwordRequirementStatus = getPasswordRequirementStatus(password);
 
   // --- Define Consistent Styles ---
   const inputBaseClasses = "border border-gray-300 rounded w-full p-2 focus:outline-none focus:ring-2 focus:ring-[#2980b9] focus:border-transparent disabled:bg-gray-100";
@@ -24,6 +29,7 @@ function Signup() {
     e.preventDefault();
     setError(''); // Clear previous errors
     setSuccess('');
+    setPasswordMissingRequirements([]);
 
     // Basic Validation
     if (!username || !email || !password || !confirmPassword) {
@@ -36,7 +42,8 @@ function Signup() {
     }
     const missingRequirements = getMissingPasswordRequirements(password);
     if (missingRequirements.length > 0) {
-      setError(`Password is missing: ${missingRequirements.join(', ')}.`);
+      setError('Password is missing required items.');
+      setPasswordMissingRequirements(missingRequirements);
       return;
     }
 
@@ -62,7 +69,11 @@ function Signup() {
 
     } catch (err) {
       console.error("Signup Error:", err);
+      const apiMissingRequirements = Array.isArray(err.response?.data?.missingRequirements)
+        ? err.response.data.missingRequirements
+        : [];
       setError(err.response?.data?.message || 'Signup failed. Please try again.');
+      setPasswordMissingRequirements(apiMissingRequirements);
     } finally {
       setLoading(false);
     }
@@ -77,7 +88,17 @@ function Signup() {
           {/* Error Message */}
           {error && (
             <div className="p-3 rounded bg-red-100 text-red-700 border border-red-300 text-sm">
-              {error}
+              <p>{error}</p>
+              {passwordMissingRequirements.length > 0 && (
+                <div className="mt-2">
+                  <p className="font-medium">Missing requirements:</p>
+                  <ul className="list-disc list-inside mt-1">
+                    {passwordMissingRequirements.map((requirement) => (
+                      <li key={requirement}>{requirement}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
           {/* Success Message */}
@@ -127,6 +148,20 @@ function Signup() {
               disabled={loading}
               required
             />
+            <div className="mt-3 p-3 rounded bg-gray-50 border border-gray-200">
+              <p className="text-xs font-medium text-gray-700">Password requirements</p>
+              <ul className="mt-2 space-y-1">
+                {passwordRequirementStatus.map((requirement) => (
+                  <li
+                    key={requirement.id}
+                    className={`text-xs ${requirement.met ? 'text-green-700' : 'text-gray-600'}`}
+                  >
+                    <span className="font-mono mr-2">{requirement.met ? '[x]' : '[ ]'}</span>
+                    {requirement.label}
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
 
           {/* Confirm Password Input */}
