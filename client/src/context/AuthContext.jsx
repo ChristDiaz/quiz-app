@@ -58,6 +58,12 @@ export const AuthProvider = ({ children }) => {
     checkAuthStatus();
   }, [checkAuthStatus]);
 
+  const refreshUser = useCallback(async () => {
+    const response = await apiClient.get('/auth/me');
+    setUser(response.data.user);
+    return response.data.user;
+  }, []);
+
   // Login function
   const login = async (email, password) => {
     try {
@@ -112,6 +118,7 @@ export const AuthProvider = ({ children }) => {
     authLoading, // Only for initial auth check
     login,
     logout,
+    refreshUser,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

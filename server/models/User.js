@@ -2,6 +2,9 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 const Schema = mongoose.Schema;
 
+const passwordPolicyRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*])[A-Za-z\d!@#$%^&*]{8,}$/;
+const passwordPolicyMessage = 'Password must be at least 8 characters long and include at least one uppercase letter, one lowercase letter, one number, and one special character (e.g., !@#$%^&*).';
+
 const UserSchema = new Schema({
     username: {
         type: String,
@@ -21,7 +24,15 @@ const UserSchema = new Schema({
     password: {
         type: String,
         required: [true, 'Password is required'],
-        minlength: [6, 'Password must be at least 6 characters long']
+        validate: {
+            validator: function(value) {
+                if (!this.isModified('password')) {
+                    return true;
+                }
+                return passwordPolicyRegex.test(value);
+            },
+            message: passwordPolicyMessage
+        }
         // select: false // Optional: Uncomment to hide password hash by default
     },
     createdAt: {

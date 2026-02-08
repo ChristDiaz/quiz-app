@@ -35,7 +35,7 @@ const FRONTEND_URLS = [
 
 const corsOptions = {
   origin: FRONTEND_URLS,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
 };
@@ -55,6 +55,8 @@ const quizAttemptRoutes = require('./routes/quizAttempts');
 app.use('/api/quiz-attempts', quizAttemptRoutes);
 // User routes
 app.use('/api/auth', authRoutes); // Auth routes
+const userRoutes = require('./routes/users');
+app.use('/api/users', userRoutes);
 
 const isTest = process.env.NODE_ENV === 'test';
 

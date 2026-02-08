@@ -1,14 +1,11 @@
 import { useState, useEffect, useRef } from "react";
-import { Routes, Route, NavLink, useNavigate, Navigate } from "react-router-dom"; // Import Navigate
+import { Routes, Route, NavLink, Navigate } from "react-router-dom"; // Import Navigate
 import {
   LayoutDashboard,
   BookOpen,
   PencilLine,
   Timer,
-  User,
   Settings,
-  LogIn,
-  UserPlus,
   LogOut,
   ListChecks
 } from "lucide-react";
@@ -25,6 +22,7 @@ import EditQuiz from "./pages/EditQuiz";
 import Signup from "./pages/Signup";
 import Login from "./pages/Login";
 import MyAttempts from "./pages/MyAttempts";
+import SettingsPage from "./pages/Settings";
 
 // Component Imports
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -33,7 +31,6 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const sidebarRef = useRef(null);
   const collapseTimer = useRef(null);
-  const navigate = useNavigate();
 
   // Use the Auth context
   const { isLoggedIn, logout, authLoading: isAuthLoading } = useAuth();
@@ -147,6 +144,10 @@ function App() {
 
         {/* Bottom Section (Auth & Settings - Only Logout needed when logged in) */}
         <div className="flex flex-col gap-2 mt-8 border-t border-gray-200 pt-4 w-full">
+           <NavLink to="/settings" className={({ isActive }) => `${baseNavLinkClasses} ${isActive ? activeNavLinkClasses : inactiveNavLinkClasses}`}>
+             <Settings size={18} className={sidebarIconClass} />
+             <span className={sidebarTextClass}>Settings</span>
+           </NavLink>
            {/* Logout Button */}
            <button onClick={handleLogout} className={`${baseNavLinkClasses} ${inactiveNavLinkClasses} text-sm w-full text-left`}>
              <LogOut size={18} className={sidebarIconClass} />
@@ -176,6 +177,7 @@ function App() {
               <Route path="/quiz/:id" element={<ViewQuiz />} />
               <Route path="/quiz/:id/edit" element={<EditQuiz />} />
               <Route path="/my-attempts" element={<MyAttempts />} />
+              <Route path="/settings" element={<SettingsPage />} />
             </Route>
 
             {/* Redirect logged-in users away from login/signup */}

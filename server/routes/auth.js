@@ -8,6 +8,9 @@ const validateFields = require('../middleware/validateFields'); // Import valida
 
 const router = express.Router();
 
+const passwordPolicyRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*])[A-Za-z\d!@#$%^&*]{8,}$/;
+const passwordPolicyMessage = 'Password does not meet policy requirements. It must be at least 8 characters long and include at least one uppercase letter, one lowercase letter, one number, and one special character (e.g., !@#$%^&*).';
+
 // Load JWT Secret from environment variables
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
@@ -30,10 +33,9 @@ router.post('/signup', authLimiter, validateFields(['username', 'email', 'passwo
     const { username, email, password } = req.body;
 
     // Password policy validation
-    const passwordPolicyRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*])[A-Za-z\d!@#$%^&*]{8,}$/;
     if (!passwordPolicyRegex.test(password)) {
         return res.status(400).json({ 
-            message: 'Password does not meet policy requirements. It must be at least 8 characters long and include at least one uppercase letter, one lowercase letter, one number, and one special character (e.g., !@#$%^&*).' 
+            message: passwordPolicyMessage
         });
     }
 
@@ -134,6 +136,48 @@ router.get('/me', authMiddleware, async (req, res) => {
 
     } catch (error) {
         console.error("Get User (/me) Error:", error);
+        res.status(500).json({ message: 'An unexpected error occurred. Please try again later.' });
+    }
+});
+
+// --- PATCH /api/auth/password - Update current user's password ---
+router.patch('/password', authMiddleware, authLimiter, validateFields(['currentPassword', 'newPassword'], { currentPassword: 'string', newPassword: 'string' }), async (req, res) => {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+        return res.status(400).json({ message: 'Current and new password are required.' });
+    }
+
+    if (!passwordPolicyRegex.test(newPassword)) {
+        return res.status(400).json({ message: passwordPolicyMessage });
+    }
+
+    try {
+        const user = await User.findById(req.user.id);
+        if (!user) {
+            return res.status(404).json({ message: 'User associated with token not found.' });
+        }
+
+        const isMatch = await user.comparePassword(currentPassword);
+        if (!isMatch) {
+            return res.status(401).json({ message: 'Current password is incorrect.' });
+        }
+
+        const isSamePassword = await user.comparePassword(newPassword);
+        if (isSamePassword) {
+            return res.status(400).json({ message: 'New password must be different from the current password.' });
+        }
+
+        user.password = newPassword;
+        await user.save();
+
+        res.status(200).json({ message: 'Password updated successfully.' });
+    } catch (error) {
+        console.error('Update Password Error:', error);
+        if (error.name === 'ValidationError') {
+            const messages = Object.values(error.errors).map(val => val.message);
+            return res.status(400).json({ message: messages.join('. ') });
+        }
         res.status(500).json({ message: 'An unexpected error occurred. Please try again later.' });
     }
 });
