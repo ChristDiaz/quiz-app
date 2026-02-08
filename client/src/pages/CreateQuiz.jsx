@@ -191,8 +191,8 @@ function CreateQuiz() {
     }
 
     const parsedQuestionCount = Number.parseInt(questionCount, 10);
-    if (Number.isNaN(parsedQuestionCount) || parsedQuestionCount < 1 || parsedQuestionCount > 20) {
-      setGenerationError('Question count must be between 1 and 20.');
+    if (Number.isNaN(parsedQuestionCount) || parsedQuestionCount < 1 || parsedQuestionCount > 50) {
+      setGenerationError('Question count must be between 1 and 50.');
       return;
     }
 
@@ -284,7 +284,7 @@ function CreateQuiz() {
               id="questionCount"
               type="number"
               min="1"
-              max="20"
+              max="50"
               value={questionCount}
               onChange={(event) => setQuestionCount(event.target.value)}
               className="border border-gray-300 rounded w-full p-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2980b9] focus:border-transparent"

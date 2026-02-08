@@ -3,7 +3,7 @@ const DEFAULT_OPENAI_MODEL = 'gpt-4o-mini';
 const MAX_SOURCE_CHARACTERS = 18000;
 const DEFAULT_QUESTION_COUNT = 8;
 const MIN_QUESTION_COUNT = 1;
-const MAX_QUESTION_COUNT = 20;
+const MAX_QUESTION_COUNT = 50;
 
 function cleanString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -24,6 +24,9 @@ function buildOpenAiPayload({ sourceText, questionCount, fileName, model }) {
   const userPrompt = [
     `Create exactly ${questionCount} quiz questions from the source text.`,
     'Only use information present in the source text.',
+    'Focus on the topic knowledge itself (concepts, definitions, mechanisms, causes/effects, examples, formulas, practical understanding).',
+    'Do NOT ask about document structure or metadata (section titles, chapter numbers, page numbers, tables of contents, headings, layout, formatting, authoring style).',
+    'Prioritize questions that help a student learn and retain the subject.',
     'Use varied question types when reasonable.',
     'For true-false questions, the correctAnswer must be exactly "True" or "False".',
     'For multiple-choice and image-based questions, include 2 to 6 options and ensure correctAnswer matches one option exactly.',
@@ -79,7 +82,7 @@ function buildOpenAiPayload({ sourceText, questionCount, fileName, model }) {
     messages: [
       {
         role: 'system',
-        content: 'You create concise, high-quality quizzes and always follow the required JSON schema.',
+        content: 'You create high-quality study quizzes. Focus on subject mastery, never document-structure trivia, and always follow the required JSON schema.',
       },
       {
         role: 'user',
@@ -94,6 +97,9 @@ function buildFallbackPayload({ sourceText, questionCount, fileName, model }) {
   const userPrompt = [
     `Create exactly ${questionCount} quiz questions from the source text.`,
     'Only use information present in the source text.',
+    'Focus on the topic knowledge itself (concepts, definitions, mechanisms, causes/effects, examples, formulas, practical understanding).',
+    'Do NOT ask about document structure or metadata (section titles, chapter numbers, page numbers, tables of contents, headings, layout, formatting, authoring style).',
+    'Prioritize questions that help a student learn and retain the subject.',
     'Return valid JSON only, with this exact shape:',
     '{"title":"string","description":"string","questions":[{"questionType":"multiple-choice|true-false|fill-in-the-blank|image-based","questionText":"string","options":["string"],"correctAnswer":"string","imageUrl":"string"}]}',
     'For true-false questions, correctAnswer must be exactly "True" or "False".',
