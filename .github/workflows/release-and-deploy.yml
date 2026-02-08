@@ -161,30 +161,39 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           SSH_PORT="${PROD_SSH_PORT:-22}"
           ssh-keyscan -p "$SSH_PORT" "$PROD_SSH_HOST" >> ~/.ssh/known_hosts
+          cat >> ~/.ssh/config <<EOF
+          Host prod-target
+            HostName $PROD_SSH_HOST
+            User $PROD_SSH_USER
+            Port $SSH_PORT
+            IdentityFile ~/.ssh/id_ed25519
+            IdentitiesOnly yes
+            PreferredAuthentications publickey
+            PubkeyAuthentication yes
+            StrictHostKeyChecking yes
+          EOF
+          chmod 600 ~/.ssh/config
 
       - name: Copy deployment assets
         run: |
           set -euo pipefail
-          SSH_PORT="${PROD_SSH_PORT:-22}"
-          ssh -p "$SSH_PORT" "$PROD_SSH_USER@$PROD_SSH_HOST" "mkdir -p '$PROD_APP_DIR/scripts' '$PROD_APP_DIR/mongo'"
-          scp -P "$SSH_PORT" docker-compose.prod.yml Caddyfile .env.production.example "$PROD_SSH_USER@$PROD_SSH_HOST:$PROD_APP_DIR/"
-          scp -P "$SSH_PORT" scripts/deploy-production.sh scripts/backup-mongo.sh "$PROD_SSH_USER@$PROD_SSH_HOST:$PROD_APP_DIR/scripts/"
-          scp -P "$SSH_PORT" mongo/init-user.js "$PROD_SSH_USER@$PROD_SSH_HOST:$PROD_APP_DIR/mongo/"
+          ssh prod-target "mkdir -p '$PROD_APP_DIR/scripts' '$PROD_APP_DIR/mongo'"
+          scp docker-compose.prod.yml Caddyfile .env.production.example "prod-target:$PROD_APP_DIR/"
+          scp scripts/deploy-production.sh scripts/backup-mongo.sh "prod-target:$PROD_APP_DIR/scripts/"
+          scp mongo/init-user.js "prod-target:$PROD_APP_DIR/mongo/"
 
       - name: Optional GHCR login on server
         if: ${{ env.GHCR_PAT != '' }}
         run: |
           set -euo pipefail
-          SSH_PORT="${PROD_SSH_PORT:-22}"
           GHCR_USER="${GHCR_USERNAME:-${GITHUB_REPOSITORY_OWNER}}"
-          printf '%s' "$GHCR_PAT" | ssh -p "$SSH_PORT" "$PROD_SSH_USER@$PROD_SSH_HOST" "docker login ghcr.io -u '$GHCR_USER' --password-stdin"
+          printf '%s' "$GHCR_PAT" | ssh prod-target "docker login ghcr.io -u '$GHCR_USER' --password-stdin"
 
       - name: Deploy stack
         run: |
           set -euo pipefail
-          SSH_PORT="${PROD_SSH_PORT:-22}"
           DEPLOY_TAG="sha-${GITHUB_SHA}"
           if [ -n "${INPUT_IMAGE_TAG:-}" ]; then
             DEPLOY_TAG="$INPUT_IMAGE_TAG"
           fi
-          ssh -p "$SSH_PORT" "$PROD_SSH_USER@$PROD_SSH_HOST" "set -euo pipefail; cd '$PROD_APP_DIR'; test -f .env.production; chmod +x scripts/deploy-production.sh scripts/backup-mongo.sh; IMAGE_TAG='$DEPLOY_TAG' ./scripts/deploy-production.sh"
+          ssh prod-target "set -euo pipefail; cd '$PROD_APP_DIR'; test -f .env.production; chmod +x scripts/deploy-production.sh scripts/backup-mongo.sh; IMAGE_TAG='$DEPLOY_TAG' ./scripts/deploy-production.sh"

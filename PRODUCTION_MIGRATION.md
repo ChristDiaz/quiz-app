@@ -53,6 +53,64 @@ Explanation:
 - Only ports `80` and `443` should be public for the app.
 - MongoDB and app internal ports remain private inside Docker networks.
 
+## 2.1 SSH Hardening (Recommended Before Enabling CI Deploy)
+
+Your GitHub deploy job uses SSH, so SSH must be reachable from the internet when using GitHub-hosted runners.
+
+Use a dedicated non-root deploy user:
+
+```bash
+sudo adduser deploy
+sudo usermod -aG docker deploy
+sudo mkdir -p /opt/quiz-app
+sudo chown -R deploy:deploy /opt/quiz-app
+```
+
+Harden SSH server config:
+
+```bash
+sudo nano /etc/ssh/sshd_config
+```
+
+Set/confirm:
+
+```text
+PermitRootLogin no
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PubkeyAuthentication yes
+AllowUsers deploy
+Protocol 2
+MaxAuthTries 3
+LoginGraceTime 30
+X11Forwarding no
+AllowTcpForwarding no
+```
+
+Restart SSH:
+
+```bash
+sudo systemctl restart ssh
+```
+
+Install brute-force protection:
+
+```bash
+sudo apt install -y fail2ban
+sudo systemctl enable --now fail2ban
+```
+
+Verify before ending your current shell session:
+
+```bash
+ssh -i ~/.ssh/quiz_app_deploy deploy@<SERVER_HOST> "echo SSH_OK"
+```
+
+Notes:
+
+- With GitHub-hosted runners, SSH source IPs vary, so strict SSH IP allowlists are harder.
+- For stricter network control later, use a self-hosted runner inside your private network/VPN.
+
 ## 3. Bootstrap the Project on the Server
 
 ```bash
@@ -211,4 +269,3 @@ docker compose --env-file .env.production -f docker-compose.prod.yml exec -T mon
 - Caddy automatic HTTPS: https://caddyserver.com/docs/automatic-https
 - GitHub environments and deployment protection: https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments
 - GitHub Container Registry: https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry
-
