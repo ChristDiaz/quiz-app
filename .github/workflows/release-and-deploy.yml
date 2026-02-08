@@ -126,7 +126,6 @@ jobs:
     needs:
       - build-and-push
     environment: production
-    if: ${{ secrets.PROD_SSH_HOST != '' && secrets.PROD_SSH_USER != '' && secrets.PROD_SSH_KEY != '' && secrets.PROD_APP_DIR != '' }}
     env:
       PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
       PROD_SSH_USER: ${{ secrets.PROD_SSH_USER }}
@@ -139,6 +138,20 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Validate required deploy secrets
+        run: |
+          set -euo pipefail
+          missing=()
+          for key in PROD_SSH_HOST PROD_SSH_USER PROD_SSH_KEY PROD_APP_DIR; do
+            if [ -z "${!key:-}" ]; then
+              missing+=("$key")
+            fi
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "Missing required repository secrets: ${missing[*]}" >&2
+            exit 1
+          fi
 
       - name: Prepare SSH
         run: |
