@@ -1,6 +1,4 @@
 const path = require('path');
-const mammoth = require('mammoth');
-const pdfParse = require('pdf-parse');
 
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
@@ -72,11 +70,13 @@ async function extractTextFromDocument(file) {
   }
 
   if (isPdf(file)) {
+    const pdfParse = require('pdf-parse');
     const parsedPdf = await pdfParse(file.buffer);
     return parsedPdf.text || '';
   }
 
   if (isDocx(file)) {
+    const mammoth = require('mammoth');
     const parsedDocx = await mammoth.extractRawText({ buffer: file.buffer });
     return parsedDocx.value || '';
   }
