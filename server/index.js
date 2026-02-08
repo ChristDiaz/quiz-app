@@ -42,7 +42,7 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-app.options('*', cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
 
 app.use(express.json());
 
@@ -56,15 +56,22 @@ app.use('/api/quiz-attempts', quizAttemptRoutes);
 // User routes
 app.use('/api/auth', authRoutes); // Auth routes
 
-// MongoDB connection
-mongoose.connect(MONGO_URI)
-  .then(() => console.log('✅ MongoDB connected!'))
-  .catch((err) => console.error('MongoDB connection error:', err));
+const isTest = process.env.NODE_ENV === 'test';
 
- 
-// Start server
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ Server running on http://10.10.10.2:${PORT}`);
-}).on('error', (err) => {
-  console.error('❌ Server failed to start:', err);
-});
+// MongoDB connection
+if (!isTest) {
+  mongoose.connect(MONGO_URI)
+    .then(() => console.log('✅ MongoDB connected!'))
+    .catch((err) => console.error('MongoDB connection error:', err));
+}
+
+// Start server only when run directly (not during tests)
+if (require.main === module) {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`✅ Server running on http://10.10.10.2:${PORT}`);
+  }).on('error', (err) => {
+    console.error('❌ Server failed to start:', err);
+  });
+}
+
+module.exports = app;

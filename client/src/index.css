@@ -1,7 +1,9 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
+@theme {
+  --color-brand-primary: #2980b9;
+  --color-brand-primary-light: #e0f2fe;
+}
 
 
 /* --- Minimal Global Styles & Resets --- */
@@ -44,4 +46,3 @@ html, body, #root {
 
 /* --- Add any essential, non-utility global styles below --- */
 /* Example: Maybe a specific style for a third-party library if needed */
-
