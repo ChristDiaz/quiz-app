@@ -192,7 +192,7 @@ jobs:
       - name: Deploy stack
         run: |
           set -euo pipefail
-          DEPLOY_TAG="sha-${GITHUB_SHA}"
+          DEPLOY_TAG="sha-${GITHUB_SHA::7}"
           if [ -n "${INPUT_IMAGE_TAG:-}" ]; then
             DEPLOY_TAG="$INPUT_IMAGE_TAG"
           fi
