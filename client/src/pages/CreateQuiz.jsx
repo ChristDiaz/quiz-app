@@ -1,15 +1,67 @@
 import { useState } from 'react';
-import axios from 'axios';
 import PageHeader from '../components/PageHeader'; // Import the PageHeader component
+import { apiClient } from '../context/AuthContext';
+
+const buildEmptyQuestion = () => ({
+  questionType: 'multiple-choice',
+  questionText: '',
+  options: ['', '', '', ''],
+  correctAnswer: '',
+  imageUrl: '',
+});
+
+const SUPPORTED_DOCUMENT_FORMATS = '.txt,.md,.markdown,.csv,.json,.pdf,.docx';
+
+function normalizeGeneratedQuestion(question) {
+  const questionType = question?.questionType || 'multiple-choice';
+  const questionText = typeof question?.questionText === 'string' ? question.questionText : '';
+  const correctAnswer = typeof question?.correctAnswer === 'string' ? question.correctAnswer : '';
+  const imageUrl = typeof question?.imageUrl === 'string' ? question.imageUrl : '';
+
+  if (questionType === 'multiple-choice' || questionType === 'image-based') {
+    const options = Array.isArray(question?.options)
+      ? question.options
+        .map((option) => (typeof option === 'string' ? option.trim() : ''))
+        .filter((option) => option)
+      : [];
+
+    if (correctAnswer && !options.includes(correctAnswer)) {
+      options.unshift(correctAnswer);
+    }
+
+    while (options.length < 2) {
+      options.push('');
+    }
+
+    return {
+      questionType,
+      questionText,
+      options: options.slice(0, 6),
+      correctAnswer,
+      imageUrl,
+    };
+  }
+
+  return {
+    questionType,
+    questionText,
+    options: [],
+    correctAnswer,
+    imageUrl,
+  };
+}
 
 function CreateQuiz() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [questions, setQuestions] = useState([
-    { questionType: 'multiple-choice', questionText: '', options: ['', '', '', ''], correctAnswer: '', imageUrl: '' }
-  ]);
+  const [questions, setQuestions] = useState([buildEmptyQuestion()]);
   const [success, setSuccess] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
+  const [selectedDocument, setSelectedDocument] = useState(null);
+  const [questionCount, setQuestionCount] = useState('8');
+  const [generationError, setGenerationError] = useState('');
+  const [generationSuccess, setGenerationSuccess] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
 
   // --- Define Consistent Button Styles ---
 
@@ -46,7 +98,7 @@ function CreateQuiz() {
   };
 
   const addQuestion = () => {
-    setQuestions([...questions, { questionType: 'multiple-choice', questionText: '', options: ['', '', '', ''], correctAnswer: '', imageUrl: '' }]);
+    setQuestions([...questions, buildEmptyQuestion()]);
   };
 
   const deleteQuestion = (index) => {
@@ -72,7 +124,7 @@ function CreateQuiz() {
     try {
       const quizData = { title, description, questions };
       console.log('Quiz Data to Send:', quizData);
-      await axios.post('/api/quizzes', quizData);
+      await apiClient.post('/quizzes', quizData);
 
       setSuccess('✅ Quiz created successfully!');
       setShowSuccess(true);
@@ -84,7 +136,7 @@ function CreateQuiz() {
       // Reset form fields
       setTitle('');
       setDescription('');
-      setQuestions([{ questionType: 'multiple-choice', questionText: '', options: ['', '', '', ''], correctAnswer: '', imageUrl: '' }]);
+      setQuestions([buildEmptyQuestion()]);
     } catch (error) {
       console.error('Error creating quiz:', error);
       // TODO: Show user-friendly error message
@@ -123,6 +175,56 @@ function CreateQuiz() {
     }, 50);
   };
 
+  const handleDocumentSelection = (event) => {
+    setSelectedDocument(event.target.files?.[0] || null);
+    setGenerationError('');
+    setGenerationSuccess('');
+  };
+
+  const handleGenerateFromDocument = async () => {
+    setGenerationError('');
+    setGenerationSuccess('');
+
+    if (!selectedDocument) {
+      setGenerationError('Please select a document first.');
+      return;
+    }
+
+    const parsedQuestionCount = Number.parseInt(questionCount, 10);
+    if (Number.isNaN(parsedQuestionCount) || parsedQuestionCount < 1 || parsedQuestionCount > 20) {
+      setGenerationError('Question count must be between 1 and 20.');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('document', selectedDocument);
+    formData.append('questionCount', String(parsedQuestionCount));
+
+    try {
+      setIsGenerating(true);
+
+      const response = await apiClient.post('/quizzes/generate-from-document', formData);
+
+      const generatedQuiz = response.data?.quiz;
+      const generatedQuestions = Array.isArray(generatedQuiz?.questions)
+        ? generatedQuiz.questions.map((question) => normalizeGeneratedQuestion(question))
+        : [];
+
+      if (!generatedQuiz || generatedQuestions.length === 0) {
+        throw new Error('No questions were generated from the uploaded document.');
+      }
+
+      setTitle(generatedQuiz.title || title);
+      setDescription(generatedQuiz.description || description);
+      setQuestions(generatedQuestions);
+      setGenerationSuccess(`Generated ${generatedQuestions.length} questions from "${selectedDocument.name}".`);
+    } catch (error) {
+      setGenerationError(error.response?.data?.message || error.message || 'Failed to generate quiz from document.');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   // --- End Event Handlers ---
 
   // Define Tailwind animation for fade in/out using arbitrary variants
@@ -150,6 +252,60 @@ function CreateQuiz() {
           {success}
         </div>
       )}
+
+      <section className="mb-8 border border-gray-300 rounded-lg bg-white shadow-sm p-4 space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-800">Generate Quiz from Document</h2>
+          <p className="text-sm text-gray-600">
+            Upload a document and generate quiz questions automatically with ChatGPT.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="md:col-span-2">
+            <label htmlFor="quizSourceDocument" className="block text-sm font-medium text-gray-700 mb-1">
+              Document
+            </label>
+            <input
+              id="quizSourceDocument"
+              type="file"
+              accept={SUPPORTED_DOCUMENT_FORMATS}
+              onChange={handleDocumentSelection}
+              className="border border-gray-300 rounded w-full p-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#2980b9] focus:border-transparent"
+            />
+            <p className="text-xs text-gray-500 mt-1">Supported formats: txt, md, csv, json, pdf, docx.</p>
+          </div>
+
+          <div>
+            <label htmlFor="questionCount" className="block text-sm font-medium text-gray-700 mb-1">
+              Question Count
+            </label>
+            <input
+              id="questionCount"
+              type="number"
+              min="1"
+              max="20"
+              value={questionCount}
+              onChange={(event) => setQuestionCount(event.target.value)}
+              className="border border-gray-300 rounded w-full p-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2980b9] focus:border-transparent"
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={handleGenerateFromDocument}
+            className={primaryButtonClasses}
+            disabled={isGenerating}
+          >
+            {isGenerating ? 'Generating...' : 'Generate Quiz'}
+          </button>
+
+          {generationSuccess && <p className="text-sm text-green-700">{generationSuccess}</p>}
+          {generationError && <p className="text-sm text-red-600">{generationError}</p>}
+        </div>
+      </section>
 
       {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-6">

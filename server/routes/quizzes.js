@@ -1,7 +1,49 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
+const rateLimit = require('express-rate-limit');
 const Quiz = require('../models/Quiz');
+const authMiddleware = require('../middleware/authMiddleware');
 const validateFields = require('../middleware/validateFields');
+const {
+  extractTextFromDocument,
+  MAX_UPLOAD_BYTES,
+  SUPPORTED_DOCUMENT_MESSAGE,
+} = require('../utils/documentTextExtractor');
+const {
+  generateQuizFromDocument,
+  MIN_QUESTION_COUNT,
+  MAX_QUESTION_COUNT,
+} = require('../utils/aiQuizGenerator');
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_UPLOAD_BYTES },
+});
+
+const generateQuizLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  message: 'Too many quiz generation requests. Please wait a minute and try again.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const uploadDocument = (req, res, next) => {
+  upload.single('document')(req, res, (error) => {
+    if (!error) {
+      return next();
+    }
+
+    if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({
+        message: `Document is too large. Maximum size is ${Math.floor(MAX_UPLOAD_BYTES / (1024 * 1024))}MB.`,
+      });
+    }
+
+    return res.status(400).json({ message: 'Invalid document upload request.' });
+  });
+};
 
 // POST /api/quizzes - Create a new quiz
 router.post(
@@ -59,6 +101,69 @@ router.get('/', async (req, res) => {
     res.status(500).json({ message: 'Server error while fetching quizzes' });
   }
 });
+
+// POST /api/quizzes/generate-from-document - Build quiz draft from uploaded document
+router.post(
+  '/generate-from-document',
+  authMiddleware,
+  generateQuizLimiter,
+  uploadDocument,
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          message: `Please upload a document file. ${SUPPORTED_DOCUMENT_MESSAGE}`,
+        });
+      }
+
+      const rawQuestionCount = req.body?.questionCount;
+      if (rawQuestionCount !== undefined && typeof rawQuestionCount !== 'string') {
+        return res.status(400).json({
+          message: `questionCount must be provided as a string value between ${MIN_QUESTION_COUNT} and ${MAX_QUESTION_COUNT}.`,
+        });
+      }
+
+      const documentText = await extractTextFromDocument(req.file);
+      if (!documentText || !documentText.trim()) {
+        return res.status(400).json({ message: 'The uploaded document does not contain readable text.' });
+      }
+
+      const generationResult = await generateQuizFromDocument({
+        documentText,
+        questionCount: rawQuestionCount,
+        fileName: req.file.originalname,
+      });
+
+      return res.status(200).json({
+        message: 'Quiz generated successfully.',
+        quiz: generationResult.quiz,
+        metadata: {
+          model: generationResult.model,
+          wasSourceTruncated: generationResult.wasSourceTruncated,
+        },
+      });
+    } catch (error) {
+      if (error.code === 'UNSUPPORTED_FILE_TYPE' || error.code === 'INVALID_FILE' || error.code === 'INVALID_INPUT') {
+        return res.status(400).json({ message: error.message });
+      }
+
+      if (error.code === 'MISSING_API_KEY') {
+        return res.status(500).json({ message: 'Server is missing OpenAI configuration.' });
+      }
+
+      if (
+        error.code === 'UPSTREAM_REQUEST_FAILED' ||
+        error.code === 'UPSTREAM_NETWORK_ERROR' ||
+        error.code === 'INVALID_OUTPUT'
+      ) {
+        return res.status(502).json({ message: 'Failed to generate quiz from document. Please try again.' });
+      }
+
+      console.error('Error generating quiz from document:', error);
+      return res.status(500).json({ message: 'Server error while generating quiz.' });
+    }
+  }
+);
 
 // GET /api/quizzes/:id - Fetch a single quiz
 router.get('/:id', async (req, res) => {

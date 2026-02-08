@@ -27,6 +27,15 @@ Default endpoints:
 - Frontend: `http://127.0.0.1:5173`
 - Backend: `http://127.0.0.1:5001`
 
+## AI Quiz Generation Setup
+
+The document-to-quiz flow in `Create Quiz` requires OpenAI credentials on the server.
+
+Set these environment variables before starting the backend:
+
+- `OPENAI_API_KEY` (required)
+- `OPENAI_MODEL` (optional, defaults to `gpt-4o-mini`)
+
 ## Production Quick Checklist
 
 Use this as the fast path after each stable change. Full details are in [PRODUCTION_MIGRATION.md](./PRODUCTION_MIGRATION.md).
