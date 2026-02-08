@@ -74,6 +74,25 @@ describe('PATCH /api/users/me', () => {
 });
 
 describe('PATCH /api/auth/password', () => {
+  it('returns missing password requirements for weak passwords', async () => {
+    const res = await request(app)
+      .patch('/api/auth/password')
+      .set('Authorization', `Bearer ${buildToken()}`)
+      .send({ currentPassword: 'OldPass1!', newPassword: 'alllowercase!' });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toEqual(
+      expect.objectContaining({
+        message: 'Password does not meet policy requirements.',
+        missingRequirements: expect.arrayContaining([
+          'At least one uppercase letter',
+          'At least one number',
+        ]),
+      })
+    );
+    expect(User.findById).not.toHaveBeenCalled();
+  });
+
   it('updates password when current password is valid', async () => {
     const comparePassword = jest.fn()
       .mockResolvedValueOnce(true)

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import Settings from '../src/pages/Settings';
 
 const mockPatch = vi.fn();
@@ -91,6 +91,29 @@ describe('Settings page', () => {
     expect(await screen.findByText('New passwords do not match.')).toBeTruthy();
   });
 
+  it('shows missing password requirements without calling API', async () => {
+    render(<Settings />);
+
+    fireEvent.change(screen.getByLabelText('Current Password'), {
+      target: { value: 'OldPass1!' },
+    });
+    fireEvent.change(screen.getByLabelText('New Password'), {
+      target: { value: 'short' },
+    });
+    fireEvent.change(screen.getByLabelText('Confirm New Password'), {
+      target: { value: 'short' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Update Password' }));
+
+    expect(mockPatch).not.toHaveBeenCalled();
+    const errorMessage = await screen.findByText('New password is missing required items.');
+    const errorBox = errorMessage.closest('div');
+    expect(errorBox).toBeTruthy();
+    expect(within(errorBox).getByText('Missing requirements:')).toBeTruthy();
+    expect(within(errorBox).getByText('At least 8 characters')).toBeTruthy();
+  });
+
   it('updates password and clears password inputs on success', async () => {
     mockPatch.mockResolvedValueOnce({ data: { message: 'Password updated successfully.' } });
 
@@ -123,5 +146,36 @@ describe('Settings page', () => {
     expect(currentPasswordInput.value).toBe('');
     expect(newPasswordInput.value).toBe('');
     expect(confirmNewPasswordInput.value).toBe('');
+  });
+
+  it('shows backend missing requirements when API rejects password', async () => {
+    mockPatch.mockRejectedValueOnce({
+      response: {
+        data: {
+          message: 'Password does not meet policy requirements.',
+          missingRequirements: ['At least one uppercase letter', 'At least one number'],
+        },
+      },
+    });
+
+    render(<Settings />);
+
+    fireEvent.change(screen.getByLabelText('Current Password'), {
+      target: { value: 'OldPass1!' },
+    });
+    fireEvent.change(screen.getByLabelText('New Password'), {
+      target: { value: 'NewPass1!' },
+    });
+    fireEvent.change(screen.getByLabelText('Confirm New Password'), {
+      target: { value: 'NewPass1!' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Update Password' }));
+
+    const errorMessage = await screen.findByText('Password does not meet policy requirements.');
+    const errorBox = errorMessage.closest('div');
+    expect(errorBox).toBeTruthy();
+    expect(within(errorBox).getByText('At least one uppercase letter')).toBeTruthy();
+    expect(within(errorBox).getByText('At least one number')).toBeTruthy();
   });
 });

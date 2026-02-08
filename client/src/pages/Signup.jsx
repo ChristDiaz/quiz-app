@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
 import PageHeader from '../components/PageHeader';
+import { getMissingPasswordRequirements } from '../utils/passwordPolicy';
 
 function Signup() {
   const [username, setUsername] = useState('');
@@ -13,8 +14,6 @@ function Signup() {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const passwordPolicyRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*])[A-Za-z\d!@#$%^&*]{8,}$/;
-  const passwordPolicyMessage = 'Password must be at least 8 characters long and include at least one uppercase letter, one lowercase letter, one number, and one special character (e.g., !@#$%^&*).';
 
   // --- Define Consistent Styles ---
   const inputBaseClasses = "border border-gray-300 rounded w-full p-2 focus:outline-none focus:ring-2 focus:ring-[#2980b9] focus:border-transparent disabled:bg-gray-100";
@@ -35,8 +34,9 @@ function Signup() {
       setError('Passwords do not match.');
       return;
     }
-    if (!passwordPolicyRegex.test(password)) {
-      setError(passwordPolicyMessage);
+    const missingRequirements = getMissingPasswordRequirements(password);
+    if (missingRequirements.length > 0) {
+      setError(`Password is missing: ${missingRequirements.join(', ')}.`);
       return;
     }
 

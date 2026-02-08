@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import PageHeader from '../components/PageHeader';
 import { apiClient, useAuth } from '../context/AuthContext';
+import {
+  getMissingPasswordRequirements,
+  getPasswordRequirementStatus
+} from '../utils/passwordPolicy';
 
 function Settings() {
   const { user, refreshUser } = useAuth();
@@ -16,7 +20,9 @@ function Settings() {
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [passwordMissingRequirements, setPasswordMissingRequirements] = useState([]);
   const [passwordLoading, setPasswordLoading] = useState(false);
+  const passwordRequirementStatus = getPasswordRequirementStatus(newPassword);
 
   useEffect(() => {
     if (user) {
@@ -72,6 +78,7 @@ function Settings() {
     e.preventDefault();
     setPasswordError('');
     setPasswordSuccess('');
+    setPasswordMissingRequirements([]);
 
     if (!currentPassword || !newPassword || !confirmNewPassword) {
       setPasswordError('Please fill in all password fields.');
@@ -80,6 +87,13 @@ function Settings() {
 
     if (newPassword !== confirmNewPassword) {
       setPasswordError('New passwords do not match.');
+      return;
+    }
+
+    const missingRequirements = getMissingPasswordRequirements(newPassword);
+    if (missingRequirements.length > 0) {
+      setPasswordError('New password is missing required items.');
+      setPasswordMissingRequirements(missingRequirements);
       return;
     }
 
@@ -93,8 +107,16 @@ function Settings() {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmNewPassword('');
+      setPasswordMissingRequirements([]);
     } catch (err) {
-      setPasswordError(err.response?.data?.message || 'Failed to update password.');
+      const apiMissingRequirements = Array.isArray(err.response?.data?.missingRequirements)
+        ? err.response.data.missingRequirements
+        : [];
+      const fallbackMessage = err.message
+        ? `Failed to update password: ${err.message}`
+        : 'Failed to update password.';
+      setPasswordError(err.response?.data?.message || fallbackMessage);
+      setPasswordMissingRequirements(apiMissingRequirements);
     } finally {
       setPasswordLoading(false);
     }
@@ -162,13 +184,23 @@ function Settings() {
         <section className="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
           <h2 className="text-xl font-semibold text-gray-700 mb-1">Password</h2>
           <p className="text-sm text-gray-500 mb-6">
-            Use a strong password with at least 8 characters, including uppercase, lowercase, a number, and a special character.
+            Your password must satisfy all requirements listed below.
           </p>
 
           <form onSubmit={handlePasswordSubmit} className="space-y-4">
             {passwordError && (
               <div className="p-3 rounded bg-red-100 text-red-700 border border-red-300 text-sm">
-                {passwordError}
+                <p>{passwordError}</p>
+                {passwordMissingRequirements.length > 0 && (
+                  <div className="mt-2">
+                    <p className="font-medium">Missing requirements:</p>
+                    <ul className="list-disc list-inside mt-1">
+                      {passwordMissingRequirements.map((requirement) => (
+                        <li key={requirement}>{requirement}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
             {passwordSuccess && (
@@ -188,6 +220,20 @@ function Settings() {
                 disabled={passwordLoading}
                 required
               />
+              <div className="mt-3 p-3 rounded bg-gray-50 border border-gray-200">
+                <p className="text-xs font-medium text-gray-700">Password requirements</p>
+                <ul className="mt-2 space-y-1">
+                  {passwordRequirementStatus.map((requirement) => (
+                    <li
+                      key={requirement.id}
+                      className={`text-xs ${requirement.met ? 'text-green-700' : 'text-gray-600'}`}
+                    >
+                      <span className="font-mono mr-2">{requirement.met ? '[x]' : '[ ]'}</span>
+                      {requirement.label}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
 
             <div>

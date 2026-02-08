@@ -5,11 +5,12 @@ const rateLimit = require('express-rate-limit');
 const User = require('../models/User'); // Import the User model
 const authMiddleware = require('../middleware/authMiddleware'); // 1. Import auth middleware
 const validateFields = require('../middleware/validateFields'); // Import validateFields
+const {
+    isPasswordPolicyCompliant,
+    buildPasswordPolicyError
+} = require('../utils/passwordPolicy');
 
 const router = express.Router();
-
-const passwordPolicyRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*])[A-Za-z\d!@#$%^&*]{8,}$/;
-const passwordPolicyMessage = 'Password does not meet policy requirements. It must be at least 8 characters long and include at least one uppercase letter, one lowercase letter, one number, and one special character (e.g., !@#$%^&*).';
 
 // Load JWT Secret from environment variables
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -33,10 +34,8 @@ router.post('/signup', authLimiter, validateFields(['username', 'email', 'passwo
     const { username, email, password } = req.body;
 
     // Password policy validation
-    if (!passwordPolicyRegex.test(password)) {
-        return res.status(400).json({ 
-            message: passwordPolicyMessage
-        });
+    if (!isPasswordPolicyCompliant(password)) {
+        return res.status(400).json(buildPasswordPolicyError(password));
     }
 
     try {
@@ -148,8 +147,8 @@ router.patch('/password', authMiddleware, authLimiter, validateFields(['currentP
         return res.status(400).json({ message: 'Current and new password are required.' });
     }
 
-    if (!passwordPolicyRegex.test(newPassword)) {
-        return res.status(400).json({ message: passwordPolicyMessage });
+    if (!isPasswordPolicyCompliant(newPassword)) {
+        return res.status(400).json(buildPasswordPolicyError(newPassword));
     }
 
     try {
