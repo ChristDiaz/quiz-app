@@ -2,7 +2,7 @@ const path = require('path');
 
 const OPENAI_CHAT_COMPLETIONS_URL = 'https://api.openai.com/v1/chat/completions';
 const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
-const DEFAULT_OPENAI_MODEL = 'gpt-4.1';
+const DEFAULT_OPENAI_MODEL = 'gpt-5.2';
 const MAX_SOURCE_CHARACTERS = 18000;
 const DEFAULT_QUESTION_COUNT = 8;
 const MIN_QUESTION_COUNT = 1;
@@ -142,7 +142,7 @@ function buildFallbackPayload({ sourceText, questionCount, fileName, model }) {
 
 function buildPdfResponsesPayload({ fileName, fileBuffer, questionCount, model }) {
   const fileLabel = cleanString(fileName) || 'uploaded-document.pdf';
-  const fileData = fileBuffer.toString('base64');
+  const fileData = `data:application/pdf;base64,${fileBuffer.toString('base64')}`;
   const instructions = [
     `Read the uploaded PDF and create exactly ${questionCount} quiz questions.`,
     ...buildTopicFocusRules(),

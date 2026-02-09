@@ -188,5 +188,7 @@ describe('POST /api/quizzes/generate-from-document', () => {
       })
     );
     expect(global.fetch.mock.calls[0][0]).toContain('/v1/responses');
+    const requestBody = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(requestBody.input[0].content[0].file_data).toMatch(/^data:application\/pdf;base64,/);
   });
 });
