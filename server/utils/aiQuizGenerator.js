@@ -35,18 +35,57 @@ function buildTopicFocusRules() {
     'Focus on the topic knowledge itself (concepts, definitions, mechanisms, causes/effects, examples, formulas, practical understanding).',
     'Do NOT ask about document structure or metadata (section titles, chapter numbers, page numbers, tables of contents, headings, layout, formatting, authoring style).',
     'Prioritize questions that help a student learn and retain the subject.',
+    'If the source references figures, diagrams, charts, graphs, screenshots, or images, include at least one image-based question.',
   ];
 }
 
 function buildJsonOutputInstruction() {
-  return '{"title":"string","description":"string","questions":[{"questionType":"multiple-choice|true-false|fill-in-the-blank|image-based","questionText":"string","options":["string"],"correctAnswer":"string","imageUrl":"string"}]}';
+  return '{"title":"string","description":"string","questions":[{"questionType":"multiple-choice|true-false|fill-in-the-blank|image-based","questionText":"string","options":["string"],"correctAnswer":"string","imageUrl":"string","sourcePage":1}]}';
 }
 
-function buildOpenAiPayload({ sourceText, questionCount, fileName, model }) {
+function buildImageUrlRules(availableImageUrls, availableImageReferences = []) {
+  if (Array.isArray(availableImageReferences) && availableImageReferences.length > 0) {
+    return [
+      'Available image references extracted from the source document:',
+      ...availableImageReferences.map((reference, index) => {
+        const contextText = cleanString(reference?.contextText);
+        const contextSuffix = contextText ? ` | nearby text: ${contextText.slice(0, 140)}` : '';
+        return `${index + 1}. page ${reference.pageNumber}: ${reference.url}${contextSuffix}`;
+      }),
+      'When using questionType "image-based", set imageUrl to one of the URLs listed above.',
+      'For image-based questions, set sourcePage to the page number that matches the selected imageUrl.',
+      'Include at least one image-based question when references are available.',
+    ];
+  }
+
+  if (!Array.isArray(availableImageUrls) || availableImageUrls.length === 0) {
+    return [
+      'Only use questionType "image-based" when you can provide a valid http/https imageUrl for that question. If no image URL is available, use "multiple-choice" instead.',
+    ];
+  }
+
+  return [
+    'Available image URLs extracted from the source document (use these exact URLs for image-based questions):',
+    ...availableImageUrls.map((imageUrl, index) => `${index + 1}. ${imageUrl}`),
+    'When using questionType "image-based", set imageUrl to one of the URLs listed above.',
+    'If the source is a PDF and a page can be identified, set sourcePage to the page number that contains the image.',
+    'Include at least one image-based question using one of the listed image URLs.',
+  ];
+}
+
+function buildOpenAiPayload({
+  sourceText,
+  questionCount,
+  fileName,
+  model,
+  availableImageUrls = [],
+  availableImageReferences = [],
+}) {
   const fileLabel = cleanString(fileName) || 'uploaded-document';
   const userPrompt = [
     `Create exactly ${questionCount} quiz questions from the source text.`,
     ...buildTopicFocusRules(),
+    ...buildImageUrlRules(availableImageUrls, availableImageReferences),
     'Use varied question types when reasonable.',
     'For true-false questions, the correctAnswer must be exactly "True" or "False".',
     'For multiple-choice and image-based questions, include 2 to 6 options and ensure correctAnswer matches one option exactly.',
@@ -91,6 +130,10 @@ function buildOpenAiPayload({ sourceText, questionCount, fileName, model }) {
                   },
                   correctAnswer: { type: 'string' },
                   imageUrl: { type: 'string' },
+                  sourcePage: {
+                    type: 'integer',
+                    minimum: 1,
+                  },
                 },
               },
             },
@@ -111,11 +154,19 @@ function buildOpenAiPayload({ sourceText, questionCount, fileName, model }) {
   };
 }
 
-function buildFallbackPayload({ sourceText, questionCount, fileName, model }) {
+function buildFallbackPayload({
+  sourceText,
+  questionCount,
+  fileName,
+  model,
+  availableImageUrls = [],
+  availableImageReferences = [],
+}) {
   const fileLabel = cleanString(fileName) || 'uploaded-document';
   const userPrompt = [
     `Create exactly ${questionCount} quiz questions from the source text.`,
     ...buildTopicFocusRules(),
+    ...buildImageUrlRules(availableImageUrls, availableImageReferences),
     'Return valid JSON only, with this exact shape:',
     buildJsonOutputInstruction(),
     'For true-false questions, correctAnswer must be exactly "True" or "False".',
@@ -140,12 +191,21 @@ function buildFallbackPayload({ sourceText, questionCount, fileName, model }) {
   };
 }
 
-function buildPdfResponsesPayload({ fileName, fileBuffer, questionCount, model }) {
+function buildPdfResponsesPayload({
+  fileName,
+  fileBuffer,
+  questionCount,
+  model,
+  availableImageUrls = [],
+  availableImageReferences = [],
+}) {
   const fileLabel = cleanString(fileName) || 'uploaded-document.pdf';
   const fileData = `data:application/pdf;base64,${fileBuffer.toString('base64')}`;
   const instructions = [
     `Read the uploaded PDF and create exactly ${questionCount} quiz questions.`,
     ...buildTopicFocusRules(),
+    ...buildImageUrlRules(availableImageUrls, availableImageReferences),
+    'For each image-based question, sourcePage must be the PDF page number where the referenced figure appears.',
     'Use varied question types when reasonable.',
     'For true-false questions, the correctAnswer must be exactly "True" or "False".',
     'For multiple-choice and image-based questions, include 2 to 6 options and ensure correctAnswer matches one option exactly.',
@@ -379,6 +439,14 @@ function normalizeTrueFalseAnswer(rawAnswer) {
   return '';
 }
 
+function normalizePositiveInteger(rawValue) {
+  const parsedValue = Number.parseInt(rawValue, 10);
+  if (Number.isNaN(parsedValue) || parsedValue <= 0) {
+    return null;
+  }
+  return parsedValue;
+}
+
 function isHttpUrl(value) {
   if (!value) {
     return false;
@@ -390,6 +458,35 @@ function isHttpUrl(value) {
   } catch {
     return false;
   }
+}
+
+function isRelativeGeneratedMediaUrl(value) {
+  return typeof value === 'string' && value.startsWith('/generated-media/');
+}
+
+function isAllowedImageUrl(value, availableImageUrls) {
+  if (!Array.isArray(availableImageUrls) || availableImageUrls.length === 0) {
+    return isHttpUrl(value) || isRelativeGeneratedMediaUrl(value);
+  }
+
+  return availableImageUrls.includes(value);
+}
+
+function buildImagePageLookup(availableImageReferences = []) {
+  const imagePageLookup = new Map();
+  if (!Array.isArray(availableImageReferences)) {
+    return imagePageLookup;
+  }
+
+  availableImageReferences.forEach((reference) => {
+    const imageUrl = cleanString(reference?.url);
+    const pageNumber = normalizePositiveInteger(reference?.pageNumber);
+    if (imageUrl && pageNumber) {
+      imagePageLookup.set(imageUrl, pageNumber);
+    }
+  });
+
+  return imagePageLookup;
 }
 
 function sanitizeOptions(rawOptions, rawCorrectAnswer) {
@@ -433,9 +530,15 @@ function sanitizeOptions(rawOptions, rawCorrectAnswer) {
   return { options: boundedOptions, correctAnswer };
 }
 
-function sanitizeQuestion(question) {
+function sanitizeQuestion(
+  question,
+  availableImageUrls = [],
+  fallbackImageUrl = '',
+  imagePageLookup = new Map()
+) {
   const questionType = normalizeQuestionType(question?.questionType);
   const questionText = cleanString(question?.questionText);
+  const sourcePage = normalizePositiveInteger(question?.sourcePage);
 
   if (!questionText) {
     return null;
@@ -477,21 +580,51 @@ function sanitizeQuestion(question) {
 
   if (questionType === 'image-based') {
     const imageUrl = cleanString(question?.imageUrl);
-    if (isHttpUrl(imageUrl)) {
+    if (isAllowedImageUrl(imageUrl, availableImageUrls)) {
       sanitizedQuestion.imageUrl = imageUrl;
+      const resolvedSourcePage = sourcePage || imagePageLookup.get(imageUrl);
+      if (resolvedSourcePage) {
+        sanitizedQuestion.sourcePage = resolvedSourcePage;
+      }
+      return sanitizedQuestion;
     }
+
+    if (fallbackImageUrl) {
+      sanitizedQuestion.imageUrl = fallbackImageUrl;
+      const resolvedSourcePage = sourcePage || imagePageLookup.get(fallbackImageUrl);
+      if (resolvedSourcePage) {
+        sanitizedQuestion.sourcePage = resolvedSourcePage;
+      }
+      return sanitizedQuestion;
+    }
+
+    // Avoid "image-based" questions with no usable image source.
+    sanitizedQuestion.questionType = 'multiple-choice';
   }
 
   return sanitizedQuestion;
 }
 
-function sanitizeGeneratedQuiz(rawQuiz, questionCount) {
+function sanitizeGeneratedQuiz(
+  rawQuiz,
+  questionCount,
+  availableImageUrls = [],
+  availableImageReferences = []
+) {
   const title = cleanString(rawQuiz?.title) || 'Generated Quiz';
   const description = cleanString(rawQuiz?.description) || 'Generated from uploaded document.';
   const sourceQuestions = Array.isArray(rawQuiz?.questions) ? rawQuiz.questions : [];
+  const imagePageLookup = buildImagePageLookup(availableImageReferences);
 
+  let imageUrlCursor = 0;
   const questions = sourceQuestions
-    .map((question) => sanitizeQuestion(question))
+    .map((question) => {
+      const fallbackImageUrl = availableImageUrls.length > 0
+        ? availableImageUrls[imageUrlCursor % availableImageUrls.length]
+        : '';
+      imageUrlCursor += 1;
+      return sanitizeQuestion(question, availableImageUrls, fallbackImageUrl, imagePageLookup);
+    })
     .filter(Boolean)
     .slice(0, questionCount);
 
@@ -504,13 +637,23 @@ function sanitizeGeneratedQuiz(rawQuiz, questionCount) {
   return { title, description, questions };
 }
 
-async function generateQuizFromText({ sourceText, questionCount, fileName, model, openAiApiKey }) {
+async function generateQuizFromText({
+  sourceText,
+  questionCount,
+  fileName,
+  model,
+  openAiApiKey,
+  availableImageUrls = [],
+  availableImageReferences = [],
+}) {
   const truncatedSourceText = sourceText.slice(0, MAX_SOURCE_CHARACTERS);
   const strictPayload = buildOpenAiPayload({
     sourceText: truncatedSourceText,
     questionCount,
     fileName,
     model,
+    availableImageUrls,
+    availableImageReferences,
   });
 
   let rawQuiz;
@@ -526,6 +669,8 @@ async function generateQuizFromText({ sourceText, questionCount, fileName, model
       questionCount,
       fileName,
       model,
+      availableImageUrls,
+      availableImageReferences,
     });
     rawQuiz = await requestOpenAiChatCompletion(fallbackPayload, openAiApiKey);
   }
@@ -536,12 +681,22 @@ async function generateQuizFromText({ sourceText, questionCount, fileName, model
   };
 }
 
-async function generateQuizFromPdf({ fileName, fileBuffer, questionCount, model, openAiApiKey }) {
+async function generateQuizFromPdf({
+  fileName,
+  fileBuffer,
+  questionCount,
+  model,
+  openAiApiKey,
+  availableImageUrls = [],
+  availableImageReferences = [],
+}) {
   const pdfPayload = buildPdfResponsesPayload({
     fileName,
     fileBuffer,
     questionCount,
     model,
+    availableImageUrls,
+    availableImageReferences,
   });
 
   const rawQuiz = await requestOpenAiResponses(pdfPayload, openAiApiKey);
@@ -562,6 +717,8 @@ async function generateQuizFromDocument({
   fileName,
   documentBuffer,
   mimeType,
+  availableImageUrls = [],
+  availableImageReferences = [],
 }) {
   const openAiApiKey = process.env.OPENAI_API_KEY;
   if (!openAiApiKey) {
@@ -587,6 +744,8 @@ async function generateQuizFromDocument({
         questionCount: boundedQuestionCount,
         model,
         openAiApiKey,
+        availableImageUrls,
+        availableImageReferences,
       });
       usedPdfInput = true;
     } catch (error) {
@@ -600,6 +759,8 @@ async function generateQuizFromDocument({
         fileName,
         model,
         openAiApiKey,
+        availableImageUrls,
+        availableImageReferences,
       });
 
       rawQuiz = textGenerationResult.rawQuiz;
@@ -618,19 +779,27 @@ async function generateQuizFromDocument({
       fileName,
       model,
       openAiApiKey,
+      availableImageUrls,
+      availableImageReferences,
     });
 
     rawQuiz = textGenerationResult.rawQuiz;
     wasSourceTruncated = textGenerationResult.wasSourceTruncated;
   }
 
-  const quiz = sanitizeGeneratedQuiz(rawQuiz, boundedQuestionCount);
+  const quiz = sanitizeGeneratedQuiz(
+    rawQuiz,
+    boundedQuestionCount,
+    availableImageUrls,
+    availableImageReferences
+  );
 
   return {
     quiz,
     model,
     wasSourceTruncated,
     usedPdfInput,
+    availableImageCount: availableImageUrls.length,
   };
 }
 

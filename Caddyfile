@@ -9,6 +9,10 @@
     reverse_proxy server:3000
   }
 
+  handle /generated-media/* {
+    reverse_proxy server:3000
+  }
+
   handle {
     reverse_proxy client:5173
   }
@@ -21,4 +25,3 @@
     X-Frame-Options "DENY"
   }
 }
-

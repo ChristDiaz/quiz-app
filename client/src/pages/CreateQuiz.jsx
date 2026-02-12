@@ -206,6 +206,7 @@ function CreateQuiz() {
       const response = await apiClient.post('/quizzes/generate-from-document', formData);
 
       const generatedQuiz = response.data?.quiz;
+      const generationMetadata = response.data?.metadata || {};
       const generatedQuestions = Array.isArray(generatedQuiz?.questions)
         ? generatedQuiz.questions.map((question) => normalizeGeneratedQuestion(question))
         : [];
@@ -217,7 +218,21 @@ function CreateQuiz() {
       setTitle(generatedQuiz.title || title);
       setDescription(generatedQuiz.description || description);
       setQuestions(generatedQuestions);
-      setGenerationSuccess(`Generated ${generatedQuestions.length} questions from "${selectedDocument.name}".`);
+      const attemptedImageCount = Number(generationMetadata.attemptedImageCount) || 0;
+      const generatedImageCount = Number(generationMetadata.generatedImageCount) || 0;
+      const attemptedPdfCropCount = Number(generationMetadata.attemptedPdfCropCount) || 0;
+      const assignedPdfCropCount = Number(generationMetadata.assignedPdfCropCount) || 0;
+      let imageSummary = '';
+
+      if (attemptedPdfCropCount > 0) {
+        imageSummary += ` PDF image crops assigned: ${assignedPdfCropCount}/${attemptedPdfCropCount}.`;
+      }
+
+      if (attemptedImageCount > 0) {
+        imageSummary += ` Generated illustrations: ${generatedImageCount}/${attemptedImageCount}.`;
+      }
+
+      setGenerationSuccess(`Generated ${generatedQuestions.length} questions from "${selectedDocument.name}".${imageSummary}`);
     } catch (error) {
       setGenerationError(error.response?.data?.message || error.message || 'Failed to generate quiz from document.');
     } finally {
@@ -392,10 +407,10 @@ function CreateQuiz() {
                 <label htmlFor={`qImgUrl-${qIndex}`} className="block text-sm font-medium text-gray-700 mb-1">Image URL <span className="text-xs text-gray-500">(Optional)</span></label>
                 <input
                   id={`qImgUrl-${qIndex}`}
-                  type="url"
+                  type="text"
                   className="border border-gray-300 rounded w-full p-2 focus:outline-none focus:ring-2 focus:ring-[#2980b9] focus:border-transparent"
                   value={q.imageUrl || ''}
-                  placeholder="https://example.com/image.jpg"
+                  placeholder="https://example.com/image.jpg or /generated-media/..."
                   onChange={(e) => handleQuestionChange(qIndex, 'imageUrl', e.target.value)}
                 />
                 {/* Optional: Image Preview */}

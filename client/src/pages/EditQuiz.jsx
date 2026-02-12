@@ -344,10 +344,10 @@ function EditQuiz() {
                     <label htmlFor={`qImgUrl-${qIndex}`} className="block text-sm font-medium text-gray-700 mb-1">Image URL <span className="text-xs text-gray-500">(Optional)</span></label>
                     <input
                       id={`qImgUrl-${qIndex}`}
-                      type="url"
+                      type="text"
                       className={inputBaseClasses}
                       value={q.imageUrl || ''}
-                      placeholder="https://example.com/image.jpg"
+                      placeholder="https://example.com/image.jpg or /generated-media/..."
                       onChange={(e) => handleQuestionDetailChange(qIndex, 'imageUrl', e.target.value)}
                       disabled={savingQuestionIndex === qIndex || savingQuestionIndex === 'all'}
                     />

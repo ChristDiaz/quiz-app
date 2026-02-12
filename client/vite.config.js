@@ -28,6 +28,11 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
+      '/generated-media': {
+        target: apiProxyTarget,
+        changeOrigin: true,
+        secure: false,
+      },
     },
   },
 })

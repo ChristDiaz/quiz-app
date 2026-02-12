@@ -35,7 +35,18 @@ PDF uploads use OpenAI's native file input path for better content understanding
 Set these environment variables before starting the backend:
 
 - `OPENAI_API_KEY` (required)
-- `OPENAI_MODEL` (optional, defaults to `gpt-4.1`)
+- `OPENAI_MODEL` (optional, defaults to `gpt-5.2`)
+- `OPENAI_CROP_VISION_RERANK` (optional, defaults to `true`)
+- `OPENAI_IMAGE_SELECTION_MODEL` (optional, defaults to `gpt-4.1-mini`)
+- `OPENAI_IMAGE_REFERENCE_LIMIT` (optional, defaults to `40`)
+- `PDF_RENDER_ENGINE` (optional, defaults to `auto`)
+  - `auto`: use PDFium (Python) for PDF page/crop rendering when available, then fallback to PDF.js
+  - `pdfjs`: force the legacy PDF.js renderer only
+- `PDFIUM_PYTHON_BIN` (optional, absolute path to a Python binary with `pypdfium2` installed; useful when your shell `python3` differs from server runtime `python3`)
+- `PDF_MAX_RENDER_PAGES` (optional, defaults to `80`)
+- `PDF_MAX_IMAGE_CROPS_PER_PAGE` (optional, defaults to `2`)
+- `PDF_MAX_TEXT_CROPS_PER_PAGE` (optional, defaults to `2`)
+- `PDF_MAX_TOTAL_CROPS` (optional, defaults to `PDF_MAX_RENDER_PAGES * (PDF_MAX_IMAGE_CROPS_PER_PAGE + PDF_MAX_TEXT_CROPS_PER_PAGE)`)
 
 ## Production Quick Checklist
 
