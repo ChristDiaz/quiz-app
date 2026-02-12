@@ -14,6 +14,7 @@ const DEFAULT_IMAGE_SELECTION_MODEL = 'gpt-4.1-mini';
 const DEFAULT_MAX_VISION_RERANK_QUESTIONS = 12;
 const DEFAULT_MAX_VISION_RERANK_CANDIDATES = 4;
 const VISION_RERANK_MIN_SCORE_DELTA = 8;
+const DEFAULT_DEBUG_TOP_CANDIDATES = 3;
 
 function cleanString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -215,6 +216,30 @@ function buildQuestionSummary(question) {
   ]
     .filter(Boolean)
     .join('\n');
+}
+
+function buildQuestionDebugLabel(question) {
+  return cleanString(question?.questionText).slice(0, 160);
+}
+
+function buildCandidateDebugSummary(candidateEntry) {
+  if (!candidateEntry?.candidate) {
+    return null;
+  }
+
+  const candidate = candidateEntry.candidate;
+  return {
+    url: candidate.url,
+    pageNumber: candidate.pageNumber,
+    sourceType: candidate.sourceType,
+    tocSignal: candidate.tocSignal,
+    areaRatio: candidate.areaRatio,
+    score: candidateEntry.score,
+    contextHits: candidateEntry.contextHits,
+    pageHits: candidateEntry.pageHits,
+    usageCount: candidateEntry.usageCount,
+    contextPreview: cleanString(candidate.contextText).slice(0, 120),
+  };
 }
 
 function normalizePdfImageCandidates(pdfImageCandidates = []) {
@@ -583,6 +608,11 @@ async function assignPdfCropImagesToQuizQuestions(quiz, pdfImageCandidates = [])
   const openAiApiKey = cleanString(process.env.OPENAI_API_KEY);
   const enableVisionRerank = parseBooleanEnv(process.env.OPENAI_CROP_VISION_RERANK, true) && !!openAiApiKey;
   const imageSelectionModel = cleanString(process.env.OPENAI_IMAGE_SELECTION_MODEL) || DEFAULT_IMAGE_SELECTION_MODEL;
+  const debugImageSelection = parseBooleanEnv(process.env.OPENAI_DEBUG_IMAGE_SELECTION, false);
+  const debugTopCandidates = Math.max(
+    1,
+    parsePositiveInt(process.env.OPENAI_DEBUG_IMAGE_SELECTION_TOP_CANDIDATES, DEFAULT_DEBUG_TOP_CANDIDATES)
+  );
   const maxVisionRerankQuestions = Math.max(
     0,
     parsePositiveInt(process.env.OPENAI_MAX_CROP_RERANK_QUESTIONS, DEFAULT_MAX_VISION_RERANK_QUESTIONS)
@@ -613,6 +643,10 @@ async function assignPdfCropImagesToQuizQuestions(quiz, pdfImageCandidates = [])
       selectionHints
     );
     let selectedCandidate = rankedCandidates[0]?.candidate || null;
+    let selectedBy = rankedCandidates[0]?.candidate ? 'score-rank' : 'none';
+    let usedVisionRerank = false;
+    let visionRerankSucceeded = false;
+    let selectedExistingImageUrl = false;
 
     if (
       enableVisionRerank &&
@@ -621,6 +655,7 @@ async function assignPdfCropImagesToQuizQuestions(quiz, pdfImageCandidates = [])
       visionRerankCount < maxVisionRerankQuestions &&
       shouldUseVisionRerank(rankedCandidates, preferredPage)
     ) {
+      usedVisionRerank = true;
       const visionCandidateEntries = rankedCandidates.slice(0, maxVisionRerankCandidates);
       const visionSelectedCandidate = await selectCandidateByVision({
         question,
@@ -632,6 +667,8 @@ async function assignPdfCropImagesToQuizQuestions(quiz, pdfImageCandidates = [])
       if (visionSelectedCandidate) {
         selectedCandidate = visionSelectedCandidate;
         visionRerankCount += 1;
+        visionRerankSucceeded = true;
+        selectedBy = 'vision-rerank';
       }
     }
 
@@ -640,6 +677,24 @@ async function assignPdfCropImagesToQuizQuestions(quiz, pdfImageCandidates = [])
       if (candidateUrls.has(existingImageUrl)) {
         candidateUsage.set(existingImageUrl, (candidateUsage.get(existingImageUrl) || 0) + 1);
         assignedPdfCropCount += 1;
+        selectedExistingImageUrl = true;
+        selectedBy = 'existing-image-url';
+      }
+
+      if (debugImageSelection) {
+        console.log('Image selection debug:', {
+          questionIndex: attemptedPdfCropCount,
+          question: buildQuestionDebugLabel(question),
+          preferredPage,
+          selectedBy,
+          selectedImageUrl: selectedExistingImageUrl ? existingImageUrl : '',
+          selectedSourcePage: selectedExistingImageUrl ? parsePageNumberFromSnapshotUrl(existingImageUrl) : null,
+          usedVisionRerank,
+          visionRerankSucceeded,
+          totalCandidates: candidates.length,
+          candidatePoolSize: candidatePool.length,
+          topCandidates: rankedCandidates.slice(0, debugTopCandidates).map(buildCandidateDebugSummary).filter(Boolean),
+        });
       }
       continue;
     }
@@ -648,6 +703,22 @@ async function assignPdfCropImagesToQuizQuestions(quiz, pdfImageCandidates = [])
     question.sourcePage = selectedCandidate.pageNumber;
     candidateUsage.set(selectedCandidate.url, (candidateUsage.get(selectedCandidate.url) || 0) + 1);
     assignedPdfCropCount += 1;
+
+    if (debugImageSelection) {
+      console.log('Image selection debug:', {
+        questionIndex: attemptedPdfCropCount,
+        question: buildQuestionDebugLabel(question),
+        preferredPage,
+        selectedBy,
+        selectedImageUrl: selectedCandidate.url,
+        selectedSourcePage: selectedCandidate.pageNumber,
+        usedVisionRerank,
+        visionRerankSucceeded,
+        totalCandidates: candidates.length,
+        candidatePoolSize: candidatePool.length,
+        topCandidates: rankedCandidates.slice(0, debugTopCandidates).map(buildCandidateDebugSummary).filter(Boolean),
+      });
+    }
   }
 
   return {

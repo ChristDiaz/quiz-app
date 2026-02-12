@@ -520,6 +520,34 @@ router.put(
   }
 });
 
+// DELETE /api/quizzes/:quizId/questions/:questionId - Delete a single question inside a quiz
+router.delete('/:quizId/questions/:questionId', async (req, res) => {
+  try {
+    const { quizId, questionId } = req.params;
+
+    const quiz = await Quiz.findById(quizId);
+    if (!quiz) {
+      return res.status(404).json({ message: 'Quiz not found' });
+    }
+
+    const originalQuestionCount = quiz.questions.length;
+    quiz.questions = quiz.questions.filter(
+      (question) => question._id.toString() !== questionId
+    );
+
+    if (quiz.questions.length === originalQuestionCount) {
+      return res.status(404).json({ message: 'Question not found' });
+    }
+
+    await quiz.save();
+
+    res.status(200).json({ message: 'Question deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting question:', error);
+    res.status(500).json({ message: 'Server error while deleting question' });
+  }
+});
+
 // DELETE /api/quizzes/:id - Delete a quiz
 router.delete('/:id', async (req, res) => {
   try {

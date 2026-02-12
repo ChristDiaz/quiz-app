@@ -38,6 +38,8 @@ Set these environment variables before starting the backend:
 - `OPENAI_MODEL` (optional, defaults to `gpt-5.2`)
 - `OPENAI_CROP_VISION_RERANK` (optional, defaults to `true`)
 - `OPENAI_IMAGE_SELECTION_MODEL` (optional, defaults to `gpt-4.1-mini`)
+- `OPENAI_DEBUG_IMAGE_SELECTION` (optional, defaults to `false`)
+- `OPENAI_DEBUG_IMAGE_SELECTION_TOP_CANDIDATES` (optional, defaults to `3`)
 - `OPENAI_IMAGE_REFERENCE_LIMIT` (optional, defaults to `40`)
 - `PDF_RENDER_ENGINE` (optional, defaults to `auto`)
   - `auto`: use PDFium (Python) for PDF page/crop rendering when available, then fallback to PDF.js

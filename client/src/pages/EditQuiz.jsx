@@ -30,6 +30,7 @@ function EditQuiz() {
 
   // Tertiary Link (Red - for Remove Option)
   const tertiaryLinkRedClasses = "text-sm text-red-500 hover:underline focus:outline-none focus:ring-2 focus:ring-red-500 rounded disabled:opacity-50 disabled:cursor-not-allowed ml-2";
+  const deleteQuestionLinkClasses = "text-sm text-red-600 hover:underline focus:outline-none focus:ring-2 focus:ring-red-500 rounded disabled:opacity-50 disabled:cursor-not-allowed";
 
   // --- End Button Styles ---
 
@@ -140,6 +141,47 @@ function EditQuiz() {
         newInput.focus();
       }
     }, 50);
+  };
+
+  const handleDeleteQuestion = async (qIndex) => {
+    if (!quiz?.questions || quiz.questions.length <= 1) {
+      alert('A quiz must contain at least one question.');
+      return;
+    }
+
+    const questionToDelete = quiz.questions[qIndex];
+    if (!questionToDelete?._id) {
+      alert('Cannot delete this question because its ID is missing.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete Question ${qIndex + 1}? This action cannot be undone.`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setSavingQuestionIndex(qIndex);
+    try {
+      await axios.delete(`/api/quizzes/${id}/questions/${questionToDelete._id}`);
+
+      setQuiz((prevQuiz) => ({
+        ...prevQuiz,
+        questions: prevQuiz.questions.filter((_, index) => index !== qIndex),
+      }));
+
+      setDirtyQuestions((prevDirty) =>
+        prevDirty
+          .filter((entry) => entry === 'meta' || (typeof entry === 'number' && entry !== qIndex))
+          .map((entry) => (typeof entry === 'number' && entry > qIndex ? entry - 1 : entry))
+      );
+    } catch (err) {
+      console.error('Error deleting question:', err);
+      alert(`Error deleting question: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setSavingQuestionIndex(null);
+    }
   };
 
   // Save individual question
@@ -436,8 +478,16 @@ function EditQuiz() {
                 )}
               </div>
 
-              {/* Save Question Button */}
-              <div className="flex justify-end border-t border-gray-200 pt-4 mt-4">
+              {/* Question Actions */}
+              <div className="flex items-center justify-between border-t border-gray-200 pt-4 mt-4">
+                <button
+                  type="button"
+                  onClick={() => handleDeleteQuestion(qIndex)}
+                  className={deleteQuestionLinkClasses}
+                  disabled={savingQuestionIndex !== null || quiz.questions.length <= 1}
+                >
+                  Delete Question
+                </button>
                  <button
                     type="button"
                     onClick={() => handleSaveQuestion(qIndex)}
