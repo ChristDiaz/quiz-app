@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const rateLimit = require('express-rate-limit');
+const mongoose = require('mongoose');
 const Quiz = require('../models/Quiz');
 const authMiddleware = require('../middleware/authMiddleware');
 const validateFields = require('../middleware/validateFields');
@@ -17,12 +18,16 @@ const {
   MIN_QUESTION_COUNT,
   MAX_QUESTION_COUNT,
 } = require('../utils/aiQuizGenerator');
+const { generateMergedQuizMetadata } = require('../utils/aiQuizMetadataGenerator');
 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_UPLOAD_BYTES },
 });
 const DEFAULT_IMAGE_REFERENCE_LIMIT = 40;
+const MIN_MERGE_QUIZ_COUNT = 2;
+const MAX_MERGE_QUIZ_COUNT = 20;
+const QUESTION_TYPES_WITH_OPTIONS = new Set(['multiple-choice', 'image-based']);
 
 const generateQuizLimiter = process.env.NODE_ENV === 'test'
   ? (req, res, next) => next()
@@ -200,6 +205,99 @@ const buildImageReferencesForPrompt = (imageCandidates = [], maxReferences = DEF
 
   return selectedReferences;
 };
+
+const cleanString = (value) => (typeof value === 'string' ? value.trim() : '');
+
+const normalizeQuestionType = (rawQuestionType) => {
+  const normalizedType = cleanString(rawQuestionType).toLowerCase();
+
+  if (normalizedType === 'true-false' || normalizedType === 'true false' || normalizedType === 'boolean') {
+    return 'true-false';
+  }
+
+  if (
+    normalizedType === 'fill-in-the-blank'
+    || normalizedType === 'fill in the blank'
+    || normalizedType === 'fill-in'
+  ) {
+    return 'fill-in-the-blank';
+  }
+
+  if (normalizedType === 'image-based' || normalizedType === 'image based' || normalizedType === 'image') {
+    return 'image-based';
+  }
+
+  return 'multiple-choice';
+};
+
+const normalizeTrueFalseAnswer = (rawAnswer) => {
+  const normalizedAnswer = cleanString(rawAnswer).toLowerCase();
+  if (normalizedAnswer === 'true' || normalizedAnswer === 't' || normalizedAnswer === 'yes') {
+    return 'True';
+  }
+  if (normalizedAnswer === 'false' || normalizedAnswer === 'f' || normalizedAnswer === 'no') {
+    return 'False';
+  }
+  return cleanString(rawAnswer);
+};
+
+const sanitizeQuestionForMerge = (sourceQuestion) => {
+  const questionType = normalizeQuestionType(sourceQuestion?.questionType);
+  const questionText = cleanString(sourceQuestion?.questionText);
+  let correctAnswer = cleanString(sourceQuestion?.correctAnswer);
+
+  if (questionType === 'true-false') {
+    correctAnswer = normalizeTrueFalseAnswer(correctAnswer);
+  }
+
+  if (!questionText || !correctAnswer) {
+    return null;
+  }
+
+  const sanitizedQuestion = {
+    questionType,
+    questionText,
+    correctAnswer,
+  };
+
+  if (QUESTION_TYPES_WITH_OPTIONS.has(questionType)) {
+    const options = Array.isArray(sourceQuestion?.options)
+      ? sourceQuestion.options
+        .map((option) => cleanString(option))
+        .filter(Boolean)
+      : [];
+    const dedupedOptions = [...new Set(options)];
+
+    if (!dedupedOptions.includes(correctAnswer)) {
+      dedupedOptions.unshift(correctAnswer);
+    }
+
+    if (dedupedOptions.length === 1) {
+      dedupedOptions.push('Alternative Option');
+    }
+
+    const boundedOptions = dedupedOptions.slice(0, 6);
+    if (!boundedOptions.includes(correctAnswer)) {
+      boundedOptions[boundedOptions.length - 1] = correctAnswer;
+    }
+
+    sanitizedQuestion.options = boundedOptions;
+  }
+
+  if (questionType === 'image-based') {
+    const imageUrl = cleanString(sourceQuestion?.imageUrl);
+    if (imageUrl) {
+      sanitizedQuestion.imageUrl = imageUrl;
+    }
+  }
+
+  return sanitizedQuestion;
+};
+
+const mergeQuestionsFromQuizzes = (sourceQuizzes = []) => sourceQuizzes
+  .flatMap((quiz) => (Array.isArray(quiz?.questions) ? quiz.questions : []))
+  .map((question) => sanitizeQuestionForMerge(question))
+  .filter(Boolean);
 
 // POST /api/quizzes - Create a new quiz
 router.post(
@@ -394,6 +492,119 @@ router.post(
 
       console.error('Error generating quiz from document:', error);
       return res.status(500).json({ message: 'Server error while generating quiz.' });
+    }
+  }
+);
+
+// POST /api/quizzes/merge - Merge multiple quizzes into one and generate metadata with OpenAI
+router.post(
+  '/merge',
+  validateFields(['quizIds'], { quizIds: 'array' }),
+  async (req, res) => {
+    try {
+      const sourceQuizIds = Array.isArray(req.body?.quizIds) ? req.body.quizIds : [];
+      const normalizedQuizIds = [...new Set(
+        sourceQuizIds
+          .map((quizId) => cleanString(quizId))
+          .filter(Boolean)
+      )];
+
+      if (normalizedQuizIds.length < MIN_MERGE_QUIZ_COUNT) {
+        return res.status(400).json({
+          message: `Select at least ${MIN_MERGE_QUIZ_COUNT} quizzes to merge.`,
+        });
+      }
+
+      if (normalizedQuizIds.length > MAX_MERGE_QUIZ_COUNT) {
+        return res.status(400).json({
+          message: `You can merge up to ${MAX_MERGE_QUIZ_COUNT} quizzes at a time.`,
+        });
+      }
+
+      const invalidQuizIds = normalizedQuizIds.filter((quizId) => !mongoose.isValidObjectId(quizId));
+      if (invalidQuizIds.length > 0) {
+        return res.status(400).json({
+          message: 'One or more quizIds are invalid.',
+          invalidQuizIds,
+        });
+      }
+
+      const sourceQuizzes = await Quiz.find({ _id: { $in: normalizedQuizIds } });
+      if (sourceQuizzes.length !== normalizedQuizIds.length) {
+        return res.status(404).json({
+          message: 'One or more selected quizzes were not found.',
+        });
+      }
+
+      const sourceQuizzesById = new Map(
+        sourceQuizzes.map((quiz) => [quiz._id.toString(), quiz])
+      );
+      const orderedSourceQuizzes = normalizedQuizIds
+        .map((quizId) => sourceQuizzesById.get(quizId))
+        .filter(Boolean);
+
+      const mergedQuestions = mergeQuestionsFromQuizzes(orderedSourceQuizzes);
+      if (mergedQuestions.length === 0) {
+        return res.status(400).json({
+          message: 'No valid questions were found in the selected quizzes.',
+        });
+      }
+
+      const generatedMetadata = await generateMergedQuizMetadata(orderedSourceQuizzes);
+      const mergedQuiz = new Quiz({
+        title: generatedMetadata.title,
+        description: generatedMetadata.description,
+        questions: mergedQuestions,
+      });
+
+      const savedQuiz = await mergedQuiz.save();
+
+      return res.status(201).json({
+        message: 'Quizzes merged successfully.',
+        quiz: savedQuiz,
+      });
+    } catch (error) {
+      if (error.code === 'MISSING_API_KEY') {
+        return res.status(500).json({ message: 'Server is missing OpenAI configuration.' });
+      }
+
+      if (error.code === 'UPSTREAM_NETWORK_ERROR') {
+        console.error('OpenAI network error while generating merge metadata:', error.message);
+        return res.status(502).json({ message: 'Could not reach OpenAI. Please try again in a moment.' });
+      }
+
+      if (error.code === 'UPSTREAM_REQUEST_FAILED') {
+        console.error('OpenAI request failed while generating merge metadata:', {
+          status: error.httpStatus,
+          message: error.upstreamMessage || error.message,
+        });
+
+        if (error.httpStatus === 401 || error.httpStatus === 403) {
+          return res.status(502).json({ message: 'OpenAI authentication failed. Check OPENAI_API_KEY.' });
+        }
+
+        if (error.httpStatus === 429) {
+          return res.status(502).json({ message: 'OpenAI rate limit or quota reached. Try again later.' });
+        }
+
+        if (error.httpStatus === 400) {
+          return res.status(502).json({
+            message: `OpenAI rejected the merge metadata request: ${error.upstreamMessage || 'Invalid request.'}`,
+          });
+        }
+
+        return res.status(502).json({ message: 'OpenAI failed to generate merged quiz metadata. Please try again.' });
+      }
+
+      if (error.code === 'INVALID_OUTPUT') {
+        console.error('OpenAI returned invalid merge metadata output:', error.message);
+        return res.status(502).json({
+          message: 'OpenAI returned unexpected output while generating merged quiz metadata.',
+        });
+      }
+
+      console.error('Error merging quizzes:', error);
+      return res.status(500).json({ message: 'Server error while merging quizzes.' });
     }
   }
 );
