@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { ArrowLeft, ArrowRight, CheckCircle, Send, RotateCcw, BookOpen } from 'lucide-react'; // Added BookOpen
 import PageHeader from '../components/PageHeader';
+import QuestionImageLightbox from '../components/QuestionImageLightbox';
 import { useAuth } from '../context/AuthContext';
 
 function Study() {
@@ -257,15 +258,13 @@ function Study() {
            {/* Question Display */}
            <div className="mb-6">
              <h2 className="font-semibold text-lg text-gray-800 mb-3">{currentQuestion.questionText}</h2>
-             {currentQuestion.imageUrl && (
-               <img
-                 src={currentQuestion.imageUrl}
-                 alt={`Question ${currentQuestionIndex + 1}`}
-                 className="w-full max-w-sm mx-auto mb-4 rounded border border-gray-200"
-                 onError={(e) => e.target.style.display='none'}
-                 onLoad={(e) => e.target.style.display='block'}
-               />
-             )}
+             <QuestionImageLightbox
+               src={currentQuestion.imageUrl}
+               alt={`Question ${currentQuestionIndex + 1}`}
+               wrapperClassName="mb-4"
+               buttonClassName="w-full"
+               imageClassName="w-full max-w-sm mx-auto rounded border border-gray-200"
+             />
            </div>
 
            {/* Answer Options */}

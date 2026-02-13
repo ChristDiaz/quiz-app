@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import PageHeader from '../components/PageHeader'; // Import the PageHeader component
+import QuestionImageLightbox from '../components/QuestionImageLightbox';
 import { apiClient } from '../context/AuthContext';
 
 const buildEmptyQuestion = () => ({
@@ -415,7 +416,12 @@ function CreateQuiz() {
                 />
                 {/* Optional: Image Preview */}
                 {q.imageUrl && (
-                  <img src={q.imageUrl} alt="Preview" className="mt-2 max-h-40 rounded border border-gray-200" onError={(e) => e.target.style.display='none'} onLoad={(e) => e.target.style.display='block'} />
+                  <QuestionImageLightbox
+                    src={q.imageUrl}
+                    alt={`Preview for question ${qIndex + 1}`}
+                    wrapperClassName="mt-2 inline-block"
+                    imageClassName="max-h-40 rounded border border-gray-200"
+                  />
                 )}
               </div>
             )}

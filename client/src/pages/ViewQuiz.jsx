@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import { BookOpen, CheckCircle } from 'lucide-react';
 import PageHeader from '../components/PageHeader'; // Import the PageHeader component
+import QuestionImageLightbox from '../components/QuestionImageLightbox';
 
 function ViewQuiz() {
   const { id } = useParams();
@@ -91,15 +92,13 @@ function ViewQuiz() {
             <h2 className="font-semibold text-lg text-[#2980b9] mb-3">{index + 1}. {q.questionText}</h2>
 
             {/* Image (if applicable) */}
-            {q.imageUrl && (
-              <img
-                src={q.imageUrl}
-                alt={`Question ${index + 1}`}
-                className="w-full max-w-md mb-4 rounded border border-gray-200" // Added border
-                onError={(e) => e.target.style.display='none'}
-                onLoad={(e) => e.target.style.display='block'}
-              />
-            )}
+            <QuestionImageLightbox
+              src={q.imageUrl}
+              alt={`Question ${index + 1}`}
+              wrapperClassName="mb-4"
+              buttonClassName="w-full"
+              imageClassName="w-full max-w-md rounded border border-gray-200" // Added border
+            />
 
             {/* Options (for MC and Image-based) */}
             {(q.questionType === 'multiple-choice' || q.questionType === 'image-based') && (

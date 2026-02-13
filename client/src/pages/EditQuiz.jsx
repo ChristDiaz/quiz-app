@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom'; // Added Link
 import axios from 'axios';
 import PageHeader from '../components/PageHeader'; // Import the PageHeader component
+import QuestionImageLightbox from '../components/QuestionImageLightbox';
 
 function EditQuiz() {
   const { id } = useParams();
@@ -395,7 +396,12 @@ function EditQuiz() {
                     />
                      {/* Optional: Image Preview */}
                     {q.imageUrl && (
-                        <img src={q.imageUrl} alt="Preview" className="mt-2 max-h-40 rounded border border-gray-200" onError={(e) => e.target.style.display='none'} onLoad={(e) => e.target.style.display='block'} />
+                        <QuestionImageLightbox
+                          src={q.imageUrl}
+                          alt={`Preview for question ${qIndex + 1}`}
+                          wrapperClassName="mt-2 inline-block"
+                          imageClassName="max-h-40 rounded border border-gray-200"
+                        />
                     )}
                  </div>
               )}
