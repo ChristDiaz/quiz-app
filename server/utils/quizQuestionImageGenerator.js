@@ -15,6 +15,9 @@ const DEFAULT_MAX_VISION_RERANK_QUESTIONS = 12;
 const DEFAULT_MAX_VISION_RERANK_CANDIDATES = 4;
 const VISION_RERANK_MIN_SCORE_DELTA = 8;
 const DEFAULT_DEBUG_TOP_CANDIDATES = 3;
+const CROP_SELECTOR_VERSION_V1 = 'v1';
+const CROP_SELECTOR_VERSION_V2 = 'v2';
+const DEFAULT_CROP_SELECTOR_VERSION = CROP_SELECTOR_VERSION_V2;
 
 function cleanString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -124,6 +127,15 @@ function hasVisualCueInQuestion(question) {
   );
 }
 
+function hasTabularCueInQuestion(question) {
+  const questionText = cleanString(question?.questionText).toLowerCase();
+  if (!questionText) {
+    return false;
+  }
+
+  return /\b(table|row|rows|column|columns|according to the table|from the table)\b/.test(questionText);
+}
+
 function parseBooleanEnv(rawValue, fallbackValue = false) {
   const value = cleanString(rawValue).toLowerCase();
   if (!value) {
@@ -136,6 +148,15 @@ function parseBooleanEnv(rawValue, fallbackValue = false) {
     return false;
   }
   return fallbackValue;
+}
+
+function resolveCropSelectorVersion(rawValue) {
+  const version = cleanString(rawValue).toLowerCase();
+  if (version === CROP_SELECTOR_VERSION_V1 || version === CROP_SELECTOR_VERSION_V2) {
+    return version;
+  }
+
+  return DEFAULT_CROP_SELECTOR_VERSION;
 }
 
 function extractResponsesOutputText(responseBody) {
@@ -337,6 +358,7 @@ function scoreCandidateForQuestion(candidate, questionTokens, preferredPage, usa
   const contextTokenCount = candidate.contextTokenSet.size;
   const pageTokenCount = candidate.pageTokenSet.size;
   const prefersVisualImage = Boolean(selectionHints.prefersVisualImage);
+  const prefersTabularRegion = Boolean(selectionHints.prefersTabularRegion);
   const tocSignal = Number(candidate.tocSignal) || 0;
 
   let score = 0;
@@ -374,6 +396,19 @@ function scoreCandidateForQuestion(candidate, questionTokens, preferredPage, usa
     score -= 4;
     if (prefersVisualImage) {
       score -= 10;
+    }
+  }
+  if (prefersTabularRegion) {
+    if (candidate.sourceType === 'text-block') {
+      score += 18;
+    } else if (candidate.sourceType === 'image-object') {
+      score -= 5;
+    }
+
+    if (candidate.areaRatio > 0 && candidate.areaRatio < 0.03) {
+      score -= 14;
+    } else if (candidate.areaRatio >= 0.06 && candidate.areaRatio <= 0.55) {
+      score += 4;
     }
   }
   score -= tocSignal * 7;
@@ -422,12 +457,13 @@ function rankCandidatesForQuestion(candidates, questionTokens, preferredPage, us
     });
 }
 
-function filterCandidatesForQuestion(candidates, selectionHints = {}) {
+function filterCandidatesForQuestion(candidates, selectionHints = {}, options = {}) {
   if (!Array.isArray(candidates) || candidates.length === 0) {
     return [];
   }
 
   const prefersVisualImage = Boolean(selectionHints.prefersVisualImage);
+  const cropSelectorVersion = resolveCropSelectorVersion(options.selectorVersion);
   if (!prefersVisualImage) {
     return candidates;
   }
@@ -438,19 +474,80 @@ function filterCandidatesForQuestion(candidates, selectionHints = {}) {
     (candidate) => (candidate.tocSignal || 0) < 2
   );
 
-  if (nonTocImageObjectCandidates.length > 0) {
-    return nonTocImageObjectCandidates;
+  if (cropSelectorVersion === CROP_SELECTOR_VERSION_V1) {
+    if (nonTocImageObjectCandidates.length > 0) {
+      return nonTocImageObjectCandidates;
+    }
+
+    if (nonTocCandidates.length > 0) {
+      return nonTocCandidates;
+    }
+
+    if (imageObjectCandidates.length > 0) {
+      return imageObjectCandidates;
+    }
+
+    return candidates;
   }
 
   if (nonTocCandidates.length > 0) {
     return nonTocCandidates;
   }
 
-  if (imageObjectCandidates.length > 0) {
-    return imageObjectCandidates;
+  return candidates;
+}
+
+function selectQuestionIndexesForCropAssignment(questions, allowPromotion = true) {
+  if (!Array.isArray(questions) || questions.length === 0) {
+    return {
+      targetIndexes: [],
+      promotedQuestionIndex: null,
+    };
   }
 
-  return candidates;
+  const imageBasedIndexes = questions
+    .map((question, index) => (cleanString(question?.questionType) === 'image-based' ? index : -1))
+    .filter((index) => index >= 0);
+
+  if (imageBasedIndexes.length > 0) {
+    return {
+      targetIndexes: imageBasedIndexes,
+      promotedQuestionIndex: null,
+    };
+  }
+
+  if (!allowPromotion) {
+    return {
+      targetIndexes: [],
+      promotedQuestionIndex: null,
+    };
+  }
+
+  const fallbackMultipleChoiceIndex = questions.findIndex((question) => {
+    if (cleanString(question?.questionType) !== 'multiple-choice') {
+      return false;
+    }
+
+    const questionText = cleanString(question?.questionText);
+    const correctAnswer = cleanString(question?.correctAnswer);
+    const options = Array.isArray(question?.options)
+      ? question.options.map((option) => cleanString(option)).filter(Boolean)
+      : [];
+
+    return Boolean(questionText && correctAnswer && options.length >= 2 && options.includes(correctAnswer));
+  });
+
+  if (fallbackMultipleChoiceIndex >= 0) {
+    return {
+      targetIndexes: [fallbackMultipleChoiceIndex],
+      promotedQuestionIndex: fallbackMultipleChoiceIndex,
+    };
+  }
+
+  return {
+    targetIndexes: [],
+    promotedQuestionIndex: null,
+  };
 }
 
 function shouldUseVisionRerank(rankedCandidates, preferredPage) {
@@ -584,12 +681,17 @@ async function assignPdfCropImagesToQuizQuestions(quiz, pdfImageCandidates = [])
   const normalizedQuiz = quiz && typeof quiz === 'object' ? quiz : {};
   const sourceQuestions = Array.isArray(normalizedQuiz.questions) ? normalizedQuiz.questions : [];
   const candidates = normalizePdfImageCandidates(pdfImageCandidates);
+  const cropSelectorVersion = resolveCropSelectorVersion(process.env.OPENAI_CROP_SELECTOR_VERSION);
+  const allowQuestionPromotion = cropSelectorVersion === CROP_SELECTOR_VERSION_V2;
+  const enableTabularCueScoring = cropSelectorVersion === CROP_SELECTOR_VERSION_V2;
 
   if (sourceQuestions.length === 0 || candidates.length === 0) {
     return {
       quiz: normalizedQuiz,
       assignedPdfCropCount: 0,
       attemptedPdfCropCount: 0,
+      promotedImageQuestionCount: 0,
+      cropSelectorVersion,
     };
   }
 
@@ -603,8 +705,16 @@ async function assignPdfCropImagesToQuizQuestions(quiz, pdfImageCandidates = [])
   const candidateUsage = new Map();
   const candidateUrls = new Set(candidates.map((candidate) => candidate.url));
   const questions = sourceQuestions.map((question) => ({ ...question }));
+  const { targetIndexes, promotedQuestionIndex } = selectQuestionIndexesForCropAssignment(
+    questions,
+    allowQuestionPromotion
+  );
+  if (promotedQuestionIndex !== null) {
+    questions[promotedQuestionIndex].questionType = 'image-based';
+  }
   let assignedPdfCropCount = 0;
   let attemptedPdfCropCount = 0;
+  let promotedImageQuestionCount = promotedQuestionIndex !== null ? 1 : 0;
   const openAiApiKey = cleanString(process.env.OPENAI_API_KEY);
   const enableVisionRerank = parseBooleanEnv(process.env.OPENAI_CROP_VISION_RERANK, true) && !!openAiApiKey;
   const imageSelectionModel = cleanString(process.env.OPENAI_IMAGE_SELECTION_MODEL) || DEFAULT_IMAGE_SELECTION_MODEL;
@@ -623,17 +733,17 @@ async function assignPdfCropImagesToQuizQuestions(quiz, pdfImageCandidates = [])
   );
   let visionRerankCount = 0;
 
-  for (const question of questions) {
-    if (cleanString(question?.questionType) !== 'image-based') {
-      continue;
-    }
-
+  for (const questionIndex of targetIndexes) {
+    const question = questions[questionIndex];
     attemptedPdfCropCount += 1;
     const questionTokens = buildQuestionMatchTokens(question);
     const selectionHints = {
       prefersVisualImage: hasVisualCueInQuestion(question),
+      prefersTabularRegion: enableTabularCueScoring && hasTabularCueInQuestion(question),
     };
-    const candidatePool = filterCandidatesForQuestion(candidates, selectionHints);
+    const candidatePool = filterCandidatesForQuestion(candidates, selectionHints, {
+      selectorVersion: cropSelectorVersion,
+    });
     const preferredPage = resolvePreferredPageForQuestion(question, questionTokens, candidatesByPage);
     const rankedCandidates = rankCandidatesForQuestion(
       candidatePool,
@@ -683,8 +793,9 @@ async function assignPdfCropImagesToQuizQuestions(quiz, pdfImageCandidates = [])
 
       if (debugImageSelection) {
         console.log('Image selection debug:', {
-          questionIndex: attemptedPdfCropCount,
+          questionIndex: questionIndex + 1,
           question: buildQuestionDebugLabel(question),
+          cropSelectorVersion,
           preferredPage,
           selectedBy,
           selectedImageUrl: selectedExistingImageUrl ? existingImageUrl : '',
@@ -706,8 +817,9 @@ async function assignPdfCropImagesToQuizQuestions(quiz, pdfImageCandidates = [])
 
     if (debugImageSelection) {
       console.log('Image selection debug:', {
-        questionIndex: attemptedPdfCropCount,
+        questionIndex: questionIndex + 1,
         question: buildQuestionDebugLabel(question),
+        cropSelectorVersion,
         preferredPage,
         selectedBy,
         selectedImageUrl: selectedCandidate.url,
@@ -728,6 +840,8 @@ async function assignPdfCropImagesToQuizQuestions(quiz, pdfImageCandidates = [])
     },
     assignedPdfCropCount,
     attemptedPdfCropCount,
+    promotedImageQuestionCount,
+    cropSelectorVersion,
   };
 }
 
@@ -836,6 +950,8 @@ async function attachGeneratedImagesToQuizQuestions(quiz, options = {}) {
       quiz: quizAfterPdfCrops,
       assignedPdfCropCount: cropAssignmentResult.assignedPdfCropCount,
       attemptedPdfCropCount: cropAssignmentResult.attemptedPdfCropCount,
+      promotedImageQuestionCount: cropAssignmentResult.promotedImageQuestionCount,
+      cropSelectorVersion: cropAssignmentResult.cropSelectorVersion,
       generatedImageCount: 0,
       attemptedImageCount: 0,
       imageGenerationModel,
@@ -849,6 +965,8 @@ async function attachGeneratedImagesToQuizQuestions(quiz, options = {}) {
       quiz: quizAfterPdfCrops,
       assignedPdfCropCount: cropAssignmentResult.assignedPdfCropCount,
       attemptedPdfCropCount: cropAssignmentResult.attemptedPdfCropCount,
+      promotedImageQuestionCount: cropAssignmentResult.promotedImageQuestionCount,
+      cropSelectorVersion: cropAssignmentResult.cropSelectorVersion,
       generatedImageCount: 0,
       attemptedImageCount: 0,
       imageGenerationModel,
@@ -873,6 +991,8 @@ async function attachGeneratedImagesToQuizQuestions(quiz, options = {}) {
       quiz: quizAfterPdfCrops,
       assignedPdfCropCount: cropAssignmentResult.assignedPdfCropCount,
       attemptedPdfCropCount: cropAssignmentResult.attemptedPdfCropCount,
+      promotedImageQuestionCount: cropAssignmentResult.promotedImageQuestionCount,
+      cropSelectorVersion: cropAssignmentResult.cropSelectorVersion,
       generatedImageCount: 0,
       attemptedImageCount: 0,
       imageGenerationModel: imageModel,
@@ -890,6 +1010,8 @@ async function attachGeneratedImagesToQuizQuestions(quiz, options = {}) {
       quiz: quizAfterPdfCrops,
       assignedPdfCropCount: cropAssignmentResult.assignedPdfCropCount,
       attemptedPdfCropCount: cropAssignmentResult.attemptedPdfCropCount,
+      promotedImageQuestionCount: cropAssignmentResult.promotedImageQuestionCount,
+      cropSelectorVersion: cropAssignmentResult.cropSelectorVersion,
       generatedImageCount: 0,
       attemptedImageCount: 0,
       imageGenerationModel: imageModel,
@@ -935,6 +1057,8 @@ async function attachGeneratedImagesToQuizQuestions(quiz, options = {}) {
     },
     assignedPdfCropCount: cropAssignmentResult.assignedPdfCropCount,
     attemptedPdfCropCount: cropAssignmentResult.attemptedPdfCropCount,
+    promotedImageQuestionCount: cropAssignmentResult.promotedImageQuestionCount,
+    cropSelectorVersion: cropAssignmentResult.cropSelectorVersion,
     generatedImageCount,
     attemptedImageCount: targetQuestionIndexes.length,
     imageGenerationModel: imageModel,

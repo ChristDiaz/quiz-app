@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pypdfium2 as pdfium
 
+IMAGE_CROP_FALLBACK_AREA_RATIO = 0.62
+
 
 def normalize_whitespace(value):
     if not value:
@@ -31,6 +33,53 @@ def clamp_bounds(bounds, page_width, page_height):
         "width": max(0, max_x - x),
         "height": max(0, max_y - y),
     }
+
+
+def ensure_minimum_bounds_size(bounds, min_width, min_height, page_width, page_height):
+    if not bounds:
+        return clamp_bounds({"x": 0, "y": 0, "width": 0, "height": 0}, page_width, page_height)
+
+    x = bounds["x"]
+    y = bounds["y"]
+    width = bounds["width"]
+    height = bounds["height"]
+
+    if width < min_width:
+        grow_by = min_width - width
+        x -= grow_by / 2
+        width = min_width
+
+    if height < min_height:
+        grow_by = min_height - height
+        y -= grow_by / 2
+        height = min_height
+
+    return clamp_bounds({"x": x, "y": y, "width": width, "height": height}, page_width, page_height)
+
+
+def shrink_bounds_to_target_area_ratio(bounds, page_width, page_height, target_area_ratio):
+    page_area = max(1, page_width * page_height)
+    target_area = max(1, page_area * target_area_ratio)
+    current_area = max(1, bounds["width"] * bounds["height"])
+    if current_area <= target_area:
+        return clamp_bounds(bounds, page_width, page_height)
+
+    scale = math.sqrt(target_area / current_area)
+    target_width = bounds["width"] * scale
+    target_height = bounds["height"] * scale
+    center_x = bounds["x"] + bounds["width"] / 2
+    center_y = bounds["y"] + bounds["height"] / 2
+
+    return clamp_bounds(
+        {
+            "x": center_x - target_width / 2,
+            "y": center_y - target_height / 2,
+            "width": target_width,
+            "height": target_height,
+        },
+        page_width,
+        page_height,
+    )
 
 
 def intersection_over_union(box_a, box_b):
@@ -269,14 +318,45 @@ def select_text_crop_candidates(
         if len(selected) >= max_text_crops_per_page:
             break
 
+    # Fallback: allow a single-line text crop when no multi-line blocks were found.
+    if not selected and text_lines:
+        best_line = max(text_lines, key=lambda line: len(line["text"]))
+        expanded = ensure_minimum_bounds_size(
+            clamp_bounds(
+                {
+                    "x": best_line["x"] - text_block_padding_px * 2,
+                    "y": best_line["y"] - text_block_padding_px * 2,
+                    "width": best_line["width"] + text_block_padding_px * 4,
+                    "height": best_line["height"] + text_block_padding_px * 4,
+                },
+                page_width,
+                page_height,
+            ),
+            min_crop_edge_px,
+            max(56, int(min_text_block_height_px * 0.7)),
+            page_width,
+            page_height,
+        )
+        area = expanded["width"] * expanded["height"]
+        if area >= page_area * 0.002:
+            selected.append(
+                {
+                    "bounds": expanded,
+                    "contextText": normalize_whitespace(best_line["text"])[:max_context_length],
+                    "score": max(1, len(best_line["text"]) * 0.2),
+                }
+            )
+
     return selected
 
 
 def select_image_crop_boxes(raw_bounds, page_width, page_height, min_crop_edge_px, min_crop_area_ratio, max_crop_area_ratio, max_crops_per_page):
     page_area = max(1, page_width * page_height)
+    normalized = []
     filtered = []
     for bounds in raw_bounds:
         clamped = clamp_bounds(bounds, page_width, page_height)
+        normalized.append(clamped)
         width = clamped["width"]
         height = clamped["height"]
         if width < min_crop_edge_px or height < min_crop_edge_px:
@@ -300,6 +380,32 @@ def select_image_crop_boxes(raw_bounds, page_width, page_height, min_crop_edge_p
             selected.append(bounds)
         if len(selected) >= max_crops_per_page:
             break
+
+    # Fallback: for scan-like PDFs where the only image object is near-full-page.
+    if not selected and normalized:
+        normalized.sort(key=lambda entry: entry["width"] * entry["height"], reverse=True)
+        fallback = normalized[0]
+        fallback_area = fallback["width"] * fallback["height"]
+
+        if fallback_area > page_area * max_crop_area_ratio:
+            fallback = shrink_bounds_to_target_area_ratio(
+                fallback,
+                page_width,
+                page_height,
+                IMAGE_CROP_FALLBACK_AREA_RATIO,
+            )
+
+        fallback = ensure_minimum_bounds_size(
+            fallback,
+            min_crop_edge_px,
+            min_crop_edge_px,
+            page_width,
+            page_height,
+        )
+        fallback_area = fallback["width"] * fallback["height"]
+        if fallback_area >= page_area * min_crop_area_ratio:
+            selected.append(fallback)
+
     return selected
 
 

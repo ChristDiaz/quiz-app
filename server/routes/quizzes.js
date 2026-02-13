@@ -471,6 +471,8 @@ router.post(
           availablePdfCropCount: pdfImageCandidates.length,
           assignedPdfCropCount: imageAttachmentResult.assignedPdfCropCount,
           attemptedPdfCropCount: imageAttachmentResult.attemptedPdfCropCount,
+          promotedImageQuestionCount: imageAttachmentResult.promotedImageQuestionCount,
+          cropSelectorVersion: imageAttachmentResult.cropSelectorVersion,
           generatedImageCount: imageAttachmentResult.generatedImageCount,
           attemptedImageCount: imageAttachmentResult.attemptedImageCount,
           imageGenerationModel: imageAttachmentResult.imageGenerationModel,

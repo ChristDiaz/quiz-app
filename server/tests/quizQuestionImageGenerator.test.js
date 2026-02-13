@@ -14,6 +14,7 @@ describe('attachGeneratedImagesToQuizQuestions', () => {
   let originalNodeEnv;
   let originalGenerateImagesFlag;
   let originalApiKey;
+  let originalCropSelectorVersion;
 
   beforeEach(() => {
     originalFetch = global.fetch;
@@ -21,8 +22,10 @@ describe('attachGeneratedImagesToQuizQuestions', () => {
     originalNodeEnv = process.env.NODE_ENV;
     originalGenerateImagesFlag = process.env.OPENAI_GENERATE_QUESTION_IMAGES;
     originalApiKey = process.env.OPENAI_API_KEY;
+    originalCropSelectorVersion = process.env.OPENAI_CROP_SELECTOR_VERSION;
     process.env.OPENAI_API_KEY = 'test-openai-key';
     process.env.OPENAI_GENERATE_QUESTION_IMAGES = 'true';
+    delete process.env.OPENAI_CROP_SELECTOR_VERSION;
     fs.mkdir.mockClear();
     fs.writeFile.mockClear();
   });
@@ -32,6 +35,11 @@ describe('attachGeneratedImagesToQuizQuestions', () => {
     process.env.NODE_ENV = originalNodeEnv;
     process.env.OPENAI_GENERATE_QUESTION_IMAGES = originalGenerateImagesFlag;
     process.env.OPENAI_API_KEY = originalApiKey;
+    if (typeof originalCropSelectorVersion === 'undefined') {
+      delete process.env.OPENAI_CROP_SELECTOR_VERSION;
+    } else {
+      process.env.OPENAI_CROP_SELECTOR_VERSION = originalCropSelectorVersion;
+    }
     jest.clearAllMocks();
   });
 
@@ -71,6 +79,86 @@ describe('attachGeneratedImagesToQuizQuestions', () => {
     expect(global.fetch).not.toHaveBeenCalled();
     expect(fs.mkdir).not.toHaveBeenCalled();
     expect(fs.writeFile).not.toHaveBeenCalled();
+  });
+
+  it('promotes one multiple-choice question to image-based when crops exist but model returned none', async () => {
+    process.env.NODE_ENV = 'test';
+
+    const quiz = {
+      title: 'Fiber Optics',
+      description: 'Connector handling',
+      questions: [
+        {
+          questionType: 'multiple-choice',
+          questionText: 'What is the correct sequence before mating?',
+          options: ['Inspect -> Clean -> Connect', 'Connect -> Inspect -> Clean'],
+          correctAnswer: 'Inspect -> Clean -> Connect',
+        },
+      ],
+    };
+
+    const result = await attachGeneratedImagesToQuizQuestions(quiz, {
+      pdfImageCandidates: [
+        {
+          url: '/generated-media/pdf-pages/test-job/page-6-crop-1.png',
+          pageNumber: 6,
+          sourceType: 'image-object',
+          width: 500,
+          height: 320,
+          area: 160000,
+          areaRatio: 0.32,
+          pageText: 'inspect clean connect',
+          contextText: 'inspect clean connect',
+        },
+      ],
+    });
+
+    expect(result.promotedImageQuestionCount).toBe(1);
+    expect(result.assignedPdfCropCount).toBe(1);
+    expect(result.quiz.questions[0].questionType).toBe('image-based');
+    expect(result.quiz.questions[0].imageUrl).toBe('/generated-media/pdf-pages/test-job/page-6-crop-1.png');
+    expect(result.quiz.questions[0].sourcePage).toBe(6);
+  });
+
+  it('does not promote multiple-choice questions when legacy selector v1 is enabled', async () => {
+    process.env.NODE_ENV = 'test';
+    process.env.OPENAI_CROP_SELECTOR_VERSION = 'v1';
+
+    const quiz = {
+      title: 'Fiber Optics',
+      description: 'Connector handling',
+      questions: [
+        {
+          questionType: 'multiple-choice',
+          questionText: 'What is the correct sequence before mating?',
+          options: ['Inspect -> Clean -> Connect', 'Connect -> Inspect -> Clean'],
+          correctAnswer: 'Inspect -> Clean -> Connect',
+        },
+      ],
+    };
+
+    const result = await attachGeneratedImagesToQuizQuestions(quiz, {
+      pdfImageCandidates: [
+        {
+          url: '/generated-media/pdf-pages/test-job/page-6-crop-1.png',
+          pageNumber: 6,
+          sourceType: 'image-object',
+          width: 500,
+          height: 320,
+          area: 160000,
+          areaRatio: 0.32,
+          pageText: 'inspect clean connect',
+          contextText: 'inspect clean connect',
+        },
+      ],
+    });
+
+    expect(result.cropSelectorVersion).toBe('v1');
+    expect(result.promotedImageQuestionCount).toBe(0);
+    expect(result.assignedPdfCropCount).toBe(0);
+    expect(result.attemptedPdfCropCount).toBe(0);
+    expect(result.quiz.questions[0].questionType).toBe('multiple-choice');
+    expect(result.quiz.questions[0].imageUrl).toBeUndefined();
   });
 
   it('prefers crops from the page whose text best matches the question', async () => {
@@ -268,6 +356,106 @@ describe('attachGeneratedImagesToQuizQuestions', () => {
     expect(result.assignedPdfCropCount).toBe(1);
     expect(result.quiz.questions[0].imageUrl).toBe('/generated-media/pdf-pages/test-job/page-10-crop-2.png');
     expect(result.quiz.questions[0].sourcePage).toBe(10);
+  });
+
+  it('can prefer a non-toc text-block crop for table questions when image-object crop is too small', async () => {
+    process.env.NODE_ENV = 'test';
+
+    const quiz = {
+      title: 'Fibre Standards',
+      description: 'Bending radius tables',
+      questions: [
+        {
+          questionType: 'image-based',
+          questionText: "Using the table shown in the image, which cable OD corresponds to a 75 mm minimum bending radius?",
+          options: ['6.0 mm', '7.5 mm', '10.0 mm', '12.0 mm'],
+          correctAnswer: '7.5 mm',
+          sourcePage: 80,
+        },
+      ],
+    };
+
+    const result = await attachGeneratedImagesToQuizQuestions(quiz, {
+      pdfImageCandidates: [
+        {
+          url: '/generated-media/pdf-pages/test-job/page-80-crop-1.png',
+          pageNumber: 80,
+          sourceType: 'image-object',
+          width: 220,
+          height: 120,
+          area: 26400,
+          areaRatio: 0.012,
+          pageText: 'minimum bending radius 12 core optical fibre cable',
+          contextText: 'Minimum Bending Radius – 12 Core Optical Fibre Cable',
+        },
+        {
+          url: '/generated-media/pdf-pages/test-job/page-80-crop-2.png',
+          pageNumber: 80,
+          sourceType: 'text-block',
+          width: 740,
+          height: 360,
+          area: 266400,
+          areaRatio: 0.14,
+          pageText: 'minimum bending radius table no load cable OD',
+          contextText: 'Table 16 Minimum Bending Radius – 12 Core Optical Fibre Cable No Load Cable OD',
+        },
+      ],
+    });
+
+    expect(result.assignedPdfCropCount).toBe(1);
+    expect(result.quiz.questions[0].imageUrl).toBe('/generated-media/pdf-pages/test-job/page-80-crop-2.png');
+    expect(result.quiz.questions[0].sourcePage).toBe(80);
+  });
+
+  it('uses legacy selector v1 to prefer image-object crops for visual cue questions', async () => {
+    process.env.NODE_ENV = 'test';
+    process.env.OPENAI_CROP_SELECTOR_VERSION = 'v1';
+
+    const quiz = {
+      title: 'Fibre Standards',
+      description: 'Bending radius tables',
+      questions: [
+        {
+          questionType: 'image-based',
+          questionText: "Using the table shown in the image, which cable OD corresponds to a 75 mm minimum bending radius?",
+          options: ['6.0 mm', '7.5 mm', '10.0 mm', '12.0 mm'],
+          correctAnswer: '7.5 mm',
+          sourcePage: 80,
+        },
+      ],
+    };
+
+    const result = await attachGeneratedImagesToQuizQuestions(quiz, {
+      pdfImageCandidates: [
+        {
+          url: '/generated-media/pdf-pages/test-job/page-80-crop-1.png',
+          pageNumber: 80,
+          sourceType: 'image-object',
+          width: 220,
+          height: 120,
+          area: 26400,
+          areaRatio: 0.012,
+          pageText: 'minimum bending radius 12 core optical fibre cable',
+          contextText: 'Minimum Bending Radius – 12 Core Optical Fibre Cable',
+        },
+        {
+          url: '/generated-media/pdf-pages/test-job/page-80-crop-2.png',
+          pageNumber: 80,
+          sourceType: 'text-block',
+          width: 740,
+          height: 360,
+          area: 266400,
+          areaRatio: 0.14,
+          pageText: 'minimum bending radius table no load cable OD',
+          contextText: 'Table 16 Minimum Bending Radius – 12 Core Optical Fibre Cable No Load Cable OD',
+        },
+      ],
+    });
+
+    expect(result.cropSelectorVersion).toBe('v1');
+    expect(result.assignedPdfCropCount).toBe(1);
+    expect(result.quiz.questions[0].imageUrl).toBe('/generated-media/pdf-pages/test-job/page-80-crop-1.png');
+    expect(result.quiz.questions[0].sourcePage).toBe(80);
   });
 
   it('generates fallback images only when explicitly enabled in non-test environments', async () => {

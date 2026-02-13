@@ -14,6 +14,7 @@ const MAX_RENDER_DIMENSION = 1600;
 const MIN_CROP_EDGE_PX = 120;
 const MIN_CROP_AREA_RATIO = 0.008;
 const MAX_IMAGE_CROP_AREA_RATIO = 0.72;
+const IMAGE_CROP_FALLBACK_AREA_RATIO = 0.62;
 const DEFAULT_MAX_IMAGE_CROPS_PER_PAGE = 2;
 const DEFAULT_MAX_TEXT_CROPS_PER_PAGE = 2;
 const CROP_CONTEXT_MARGIN_PX = 100;
@@ -234,6 +235,57 @@ function clampCropBounds(bounds, pageWidth, pageHeight) {
   };
 }
 
+function ensureMinimumBoundsSize(bounds, minWidth, minHeight, pageWidth, pageHeight) {
+  if (!bounds || !Number.isFinite(bounds.width) || !Number.isFinite(bounds.height)) {
+    return clampCropBounds({ x: 0, y: 0, width: 0, height: 0 }, pageWidth, pageHeight);
+  }
+
+  let x = bounds.x;
+  let y = bounds.y;
+  let width = bounds.width;
+  let height = bounds.height;
+
+  if (width < minWidth) {
+    const growBy = minWidth - width;
+    x -= growBy / 2;
+    width = minWidth;
+  }
+
+  if (height < minHeight) {
+    const growBy = minHeight - height;
+    y -= growBy / 2;
+    height = minHeight;
+  }
+
+  return clampCropBounds({ x, y, width, height }, pageWidth, pageHeight);
+}
+
+function shrinkBoundsToTargetAreaRatio(bounds, pageWidth, pageHeight, targetAreaRatio) {
+  const pageArea = Math.max(1, pageWidth * pageHeight);
+  const targetArea = Math.max(1, pageArea * targetAreaRatio);
+  const currentArea = Math.max(1, bounds.width * bounds.height);
+  if (currentArea <= targetArea) {
+    return clampCropBounds(bounds, pageWidth, pageHeight);
+  }
+
+  const scale = Math.sqrt(targetArea / currentArea);
+  const targetWidth = bounds.width * scale;
+  const targetHeight = bounds.height * scale;
+  const centerX = bounds.x + bounds.width / 2;
+  const centerY = bounds.y + bounds.height / 2;
+
+  return clampCropBounds(
+    {
+      x: centerX - targetWidth / 2,
+      y: centerY - targetHeight / 2,
+      width: targetWidth,
+      height: targetHeight,
+    },
+    pageWidth,
+    pageHeight
+  );
+}
+
 function calculateIntersectionOverUnion(boxA, boxB) {
   const intersectionX = Math.max(boxA.x, boxB.x);
   const intersectionY = Math.max(boxA.y, boxB.y);
@@ -259,26 +311,24 @@ function calculateIntersectionOverUnion(boxA, boxB) {
 
 function selectCropBoxesForPage(rawBounds, pageWidth, pageHeight, maxCropsPerPage) {
   const pageArea = Math.max(1, pageWidth * pageHeight);
-  const filteredBounds = rawBounds
+  const normalizedBounds = rawBounds
     .map((bounds) => clampCropBounds(bounds, pageWidth, pageHeight))
-    .filter((bounds) => {
-      if (!Number.isFinite(bounds.width) || !Number.isFinite(bounds.height)) {
-        return false;
-      }
-      if (bounds.width < MIN_CROP_EDGE_PX || bounds.height < MIN_CROP_EDGE_PX) {
-        return false;
-      }
-      const area = bounds.width * bounds.height;
-      if (area < pageArea * MIN_CROP_AREA_RATIO) {
-        return false;
-      }
-      if (area > pageArea * MAX_IMAGE_CROP_AREA_RATIO) {
-        return false;
-      }
-      const aspectRatio = bounds.width / bounds.height;
-      return aspectRatio > 0.15 && aspectRatio < 6.5;
-    })
+    .filter((bounds) => Number.isFinite(bounds.width) && Number.isFinite(bounds.height))
     .sort((a, b) => (b.width * b.height) - (a.width * a.height));
+  const filteredBounds = normalizedBounds.filter((bounds) => {
+    if (bounds.width < MIN_CROP_EDGE_PX || bounds.height < MIN_CROP_EDGE_PX) {
+      return false;
+    }
+    const area = bounds.width * bounds.height;
+    if (area < pageArea * MIN_CROP_AREA_RATIO) {
+      return false;
+    }
+    if (area > pageArea * MAX_IMAGE_CROP_AREA_RATIO) {
+      return false;
+    }
+    const aspectRatio = bounds.width / bounds.height;
+    return aspectRatio > 0.15 && aspectRatio < 6.5;
+  });
 
   const deduplicated = [];
   for (const bounds of filteredBounds) {
@@ -290,6 +340,36 @@ function selectCropBoxesForPage(rawBounds, pageWidth, pageHeight, maxCropsPerPag
     }
     if (deduplicated.length >= maxCropsPerPage) {
       break;
+    }
+  }
+
+  // Fallback: some PDFs embed a near-full-page image object (for example scans).
+  // If strict filtering rejected everything, shrink the largest image object to a usable crop.
+  if (deduplicated.length === 0 && normalizedBounds.length > 0) {
+    const largestBounds = normalizedBounds[0];
+    let fallbackBounds = largestBounds;
+    const largestArea = largestBounds.width * largestBounds.height;
+
+    if (largestArea > pageArea * MAX_IMAGE_CROP_AREA_RATIO) {
+      fallbackBounds = shrinkBoundsToTargetAreaRatio(
+        largestBounds,
+        pageWidth,
+        pageHeight,
+        IMAGE_CROP_FALLBACK_AREA_RATIO
+      );
+    }
+
+    fallbackBounds = ensureMinimumBoundsSize(
+      fallbackBounds,
+      MIN_CROP_EDGE_PX,
+      MIN_CROP_EDGE_PX,
+      pageWidth,
+      pageHeight
+    );
+
+    const fallbackArea = fallbackBounds.width * fallbackBounds.height;
+    if (fallbackArea >= pageArea * MIN_CROP_AREA_RATIO) {
+      deduplicated.push(fallbackBounds);
     }
   }
 
@@ -457,6 +537,38 @@ function selectTextCropCandidatesForPage(textItems, pageWidth, pageHeight, maxTe
     }
     if (selectedCandidates.length >= maxTextCropsPerPage) {
       break;
+    }
+  }
+
+  // Fallback: allow a single-line text crop when no multi-line blocks were detected.
+  if (selectedCandidates.length === 0 && lines.length > 0) {
+    const bestLine = [...lines].sort((left, right) => right.text.length - left.text.length)[0];
+    if (bestLine) {
+      const expandedLineBounds = ensureMinimumBoundsSize(
+        expandBounds(
+          {
+            x: bestLine.x,
+            y: bestLine.y,
+            width: bestLine.width,
+            height: bestLine.height,
+          },
+          TEXT_BLOCK_PADDING_PX * 2,
+          pageWidth,
+          pageHeight
+        ),
+        MIN_CROP_EDGE_PX,
+        Math.max(56, Math.floor(MIN_TEXT_BLOCK_HEIGHT_PX * 0.7)),
+        pageWidth,
+        pageHeight
+      );
+      const expandedArea = expandedLineBounds.width * expandedLineBounds.height;
+      if (expandedArea >= pageArea * 0.002) {
+        selectedCandidates.push({
+          bounds: expandedLineBounds,
+          contextText: cleanString(bestLine.text).slice(0, MAX_CONTEXT_LENGTH),
+          score: Math.max(1, bestLine.text.length * 0.2),
+        });
+      }
     }
   }
 
