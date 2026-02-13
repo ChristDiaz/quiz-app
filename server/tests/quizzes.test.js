@@ -123,6 +123,9 @@ describe('POST /api/quizzes/merge', () => {
       expect.objectContaining({
         message: 'Quizzes merged successfully.',
         quiz: savedQuiz,
+        metadata: expect.objectContaining({
+          ignoredDuplicateQuestionCount: 0,
+        }),
       })
     );
     expect(generateMergedQuizMetadata).toHaveBeenCalledTimes(1);
@@ -133,6 +136,92 @@ describe('POST /api/quizzes/merge', () => {
       expect.objectContaining({
         title: 'Biology and Chemistry Foundations',
         description: 'Review core ideas in cell biology and basic chemistry.',
+      })
+    );
+  });
+
+  it('ignores duplicated questions during merge and returns duplicate count', async () => {
+    const quizIds = ['507f191e810c19729de860ea', '507f191e810c19729de860eb'];
+    const sourceQuizzes = [
+      {
+        _id: quizIds[0],
+        title: 'Biology Basics',
+        description: 'Foundations.',
+        questions: [
+          {
+            questionType: 'multiple-choice',
+            questionText: 'What is DNA?',
+            options: ['A molecule', 'An organelle'],
+            correctAnswer: 'A molecule',
+          },
+        ],
+      },
+      {
+        _id: quizIds[1],
+        title: 'More Biology',
+        description: 'Additional questions.',
+        questions: [
+          {
+            questionType: 'multiple-choice',
+            questionText: '   What is DNA?   ',
+            options: ['A molecule', 'A vitamin'],
+            correctAnswer: 'A molecule',
+          },
+          {
+            questionType: 'true-false',
+            questionText: 'Cells contain DNA.',
+            correctAnswer: 'true',
+          },
+        ],
+      },
+    ];
+
+    Quiz.find.mockResolvedValue(sourceQuizzes);
+    generateMergedQuizMetadata.mockResolvedValue({
+      title: 'Biology Essentials',
+      description: 'Review key biology concepts.',
+    });
+
+    const savedQuiz = {
+      _id: '507f191e810c19729de860fd',
+      title: 'Biology Essentials',
+      description: 'Review key biology concepts.',
+      questions: [
+        {
+          questionType: 'multiple-choice',
+          questionText: 'What is DNA?',
+          options: ['A molecule', 'An organelle'],
+          correctAnswer: 'A molecule',
+        },
+        {
+          questionType: 'true-false',
+          questionText: 'Cells contain DNA.',
+          correctAnswer: 'True',
+        },
+      ],
+    };
+
+    const save = jest.fn().mockResolvedValue(savedQuiz);
+    Quiz.mockImplementationOnce((payload) => ({ ...payload, save }));
+
+    const res = await request(app).post('/api/quizzes/merge').send({ quizIds });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.body).toEqual(
+      expect.objectContaining({
+        message: 'Quizzes merged successfully.',
+        quiz: savedQuiz,
+        metadata: expect.objectContaining({
+          ignoredDuplicateQuestionCount: 1,
+        }),
+      })
+    );
+    expect(Quiz).toHaveBeenCalledWith(
+      expect.objectContaining({
+        questions: [
+          expect.objectContaining({ questionText: 'What is DNA?' }),
+          expect.objectContaining({ questionText: 'Cells contain DNA.' }),
+        ],
       })
     );
   });

@@ -97,6 +97,7 @@ function ViewQuizzes() {
       setIsMerging(true);
       const response = await apiClient.post('/quizzes/merge', { quizIds: selectedQuizIds });
       const mergedQuiz = response.data?.quiz;
+      const ignoredDuplicateQuestionCount = Number(response.data?.metadata?.ignoredDuplicateQuestionCount) || 0;
 
       if (!mergedQuiz?._id) {
         throw new Error('Merged quiz was created, but no quiz ID was returned.');
@@ -104,7 +105,10 @@ function ViewQuizzes() {
 
       setQuizzes((currentQuizzes) => [mergedQuiz, ...currentQuizzes]);
       setSelectedQuizIds([]);
-      setMergeSuccess(`Created "${mergedQuiz.title}" with ${mergedQuiz.questions?.length || 0} questions.`);
+      setMergeSuccess(
+        `Created "${mergedQuiz.title}" with ${mergedQuiz.questions?.length || 0} questions. `
+        + `Ignored ${ignoredDuplicateQuestionCount} duplicate question${ignoredDuplicateQuestionCount === 1 ? '' : 's'}.`
+      );
       setMergedQuizId(mergedQuiz._id);
     } catch (err) {
       console.error('Error merging quizzes:', err);

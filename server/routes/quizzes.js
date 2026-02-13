@@ -294,10 +294,40 @@ const sanitizeQuestionForMerge = (sourceQuestion) => {
   return sanitizedQuestion;
 };
 
-const mergeQuestionsFromQuizzes = (sourceQuizzes = []) => sourceQuizzes
-  .flatMap((quiz) => (Array.isArray(quiz?.questions) ? quiz.questions : []))
-  .map((question) => sanitizeQuestionForMerge(question))
-  .filter(Boolean);
+const buildQuestionDedupKey = (questionText) => cleanString(questionText)
+  .toLowerCase()
+  .replace(/\s+/g, ' ');
+
+const mergeQuestionsFromQuizzes = (sourceQuizzes = []) => {
+  const mergedQuestions = [];
+  const seenQuestionKeys = new Set();
+  let ignoredDuplicateQuestionCount = 0;
+
+  const sourceQuestions = sourceQuizzes.flatMap((quiz) => (
+    Array.isArray(quiz?.questions) ? quiz.questions : []
+  ));
+
+  sourceQuestions.forEach((question) => {
+    const sanitizedQuestion = sanitizeQuestionForMerge(question);
+    if (!sanitizedQuestion) {
+      return;
+    }
+
+    const dedupKey = buildQuestionDedupKey(sanitizedQuestion.questionText);
+    if (seenQuestionKeys.has(dedupKey)) {
+      ignoredDuplicateQuestionCount += 1;
+      return;
+    }
+
+    seenQuestionKeys.add(dedupKey);
+    mergedQuestions.push(sanitizedQuestion);
+  });
+
+  return {
+    mergedQuestions,
+    ignoredDuplicateQuestionCount,
+  };
+};
 
 // POST /api/quizzes - Create a new quiz
 router.post(
@@ -543,7 +573,8 @@ router.post(
         .map((quizId) => sourceQuizzesById.get(quizId))
         .filter(Boolean);
 
-      const mergedQuestions = mergeQuestionsFromQuizzes(orderedSourceQuizzes);
+      const mergeResult = mergeQuestionsFromQuizzes(orderedSourceQuizzes);
+      const { mergedQuestions, ignoredDuplicateQuestionCount } = mergeResult;
       if (mergedQuestions.length === 0) {
         return res.status(400).json({
           message: 'No valid questions were found in the selected quizzes.',
@@ -562,6 +593,9 @@ router.post(
       return res.status(201).json({
         message: 'Quizzes merged successfully.',
         quiz: savedQuiz,
+        metadata: {
+          ignoredDuplicateQuestionCount,
+        },
       });
     } catch (error) {
       if (error.code === 'MISSING_API_KEY') {
