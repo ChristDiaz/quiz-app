@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
-import { BookOpen, CheckCircle } from 'lucide-react';
-import PageHeader from '../components/PageHeader'; // Import the PageHeader component
+import { BookOpen } from 'lucide-react';
+import PageHeader from '../components/PageHeader';
+import CourseHeader from '../components/questions/CourseHeader';
 import QuestionImageLightbox from '../components/QuestionImageLightbox';
 
 function ViewQuiz() {
@@ -73,23 +74,37 @@ function ViewQuiz() {
     );
   }
 
+  const questionTypeTags = Array.from(
+    new Set(
+      (quiz.questions || [])
+        .map((question) => question.questionType)
+        .filter(Boolean)
+        .map((questionType) => {
+          if (questionType === 'true-false') return 'True / False';
+          return questionType
+            .split('-')
+            .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+            .join(' ');
+        }),
+    ),
+  );
+
   // --- Main Content ---
   return (
-    <div className="p-8">
-      {/* Use the PageHeader component - Pass dynamic title */}
-      <PageHeader title={quiz.title} />
-
-      {/* Description */}
-      {quiz.description && (
-          <p className="text-gray-600 mb-8">{quiz.description}</p>
-      )}
+    <div className="p-8 bg-[#f3f7fb] min-h-full">
+      <CourseHeader
+        category="Quiz details"
+        title={quiz.title}
+        subtitle={quiz.description || 'Browse each question. Answers are hidden until you reveal them.'}
+        tags={questionTypeTags}
+      />
 
       {/* Questions List */}
       <div className="space-y-6"> {/* Add space between question blocks */}
         {quiz.questions?.map((q, index) => (
-          <div key={q._id || index} className="p-4 border border-gray-300 rounded-lg shadow-sm bg-white"> {/* Added border color, rounded-lg */}
+          <div key={q._id || index} className="p-6 border border-gray-300 rounded-2xl shadow-sm bg-white"> {/* Added border color, rounded-lg */}
             {/* Question Text */}
-            <h2 className="font-semibold text-lg text-[#2980b9] mb-3">{index + 1}. {q.questionText}</h2>
+            <h2 className="font-semibold text-lg text-[#102a43] mb-3">{index + 1}. {q.questionText}</h2>
 
             {/* Image (if applicable) */}
             <QuestionImageLightbox
@@ -104,36 +119,46 @@ function ViewQuiz() {
             {(q.questionType === 'multiple-choice' || q.questionType === 'image-based') && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2"> {/* Reduced gap */}
                 {q.options && q.options.length > 0 && q.options.some(opt => opt?.trim() !== '') ? (
-                  q.options.map((opt, i) => {
-                    const isCorrect = opt === q.correctAnswer;
-                    return (
-                      <div
-                        key={i}
-                        className={`border rounded p-3 flex items-start gap-2 text-sm ${ // Adjusted text size
-                          isCorrect
-                            ? 'bg-green-100 border-green-400 text-green-800 font-medium' // Enhanced correct style
-                            : 'bg-gray-50 border-gray-200 text-gray-700' // Subtle base style for options
-                        }`}
-                      >
-                        <span className={`font-semibold w-5 text-right flex-shrink-0 ${isCorrect ? 'text-green-700' : 'text-gray-500'}`}> {/* Adjusted width/color */}
-                          {String.fromCharCode(65 + i)}.
-                        </span>
-                        <span>{opt || <span className="italic text-gray-400">Empty Option</span>}</span>
-                        {isCorrect && <CheckCircle className="ml-auto text-green-600 flex-shrink-0" />} {/* Moved checkmark */}
-                      </div>
-                    );
-                  })
+                  q.options.map((opt, i) => (
+                    <div
+                      key={i}
+                      className="border rounded-2xl p-3 flex items-start gap-2 text-sm bg-gray-50 border-gray-200 text-gray-700"
+                    >
+                      <span className="font-semibold w-5 text-right flex-shrink-0 text-gray-500">
+                        {String.fromCharCode(65 + i)}.
+                      </span>
+                      <span>{opt || <span className="italic text-gray-400">Empty Option</span>}</span>
+                    </div>
+                  ))
                 ) : (
                   <div className="text-gray-400 italic text-sm col-span-full">No options provided for this question.</div>
                 )}
               </div>
             )}
 
-            {/* Correct Answer Display (Consolidated) */}
-            <div className="mt-4 pt-3 border-t border-gray-200">
-                <p className="text-sm font-medium text-gray-600">Correct Answer:</p>
-                <p className="text-green-700 font-semibold">{q.correctAnswer || <span className="italic text-gray-400">Not specified</span>}</p>
-            </div>
+            <details className="mt-4 pt-3 border-t border-gray-200">
+              <summary className="cursor-pointer text-sm font-semibold text-[#102a43] hover:text-[#1d5f91]">
+                Reveal answer and explanation
+              </summary>
+              <div className="mt-3 text-sm text-gray-700 space-y-2">
+                <p>
+                  <span className="font-semibold text-gray-800">Correct Answer:</span>{' '}
+                  <span className="text-green-700 font-semibold">
+                    {q.correctAnswer || <span className="italic text-gray-400">Not specified</span>}
+                  </span>
+                </p>
+                {q.explanation && (
+                  <p>
+                    <span className="font-semibold text-gray-800">Explanation:</span> {q.explanation}
+                  </p>
+                )}
+                {q.reference && (
+                  <p>
+                    <span className="font-semibold text-gray-800">Reference:</span> {q.reference}
+                  </p>
+                )}
+              </div>
+            </details>
 
           </div> // End Question Block
         ))}
