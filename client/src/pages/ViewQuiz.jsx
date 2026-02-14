@@ -5,6 +5,7 @@ import { BookOpen } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import CourseHeader from '../components/questions/CourseHeader';
 import QuestionImageLightbox from '../components/QuestionImageLightbox';
+import { Button, Card } from '../components/ui';
 
 function ViewQuiz() {
   const { id } = useParams();
@@ -30,16 +31,12 @@ function ViewQuiz() {
     fetchQuiz();
   }, [id]);
 
-  // --- Define Button Style ---
-  // Primary style (Blue) matching CreateQuiz/ViewQuizzes but using this button's padding
-  const backButtonClasses = "inline-flex items-center gap-2 px-6 py-3 bg-[#2980b9] text-white rounded hover:bg-[#2573a6] transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2573a6]";
-
   // --- Loading State ---
   if (loading) {
     return (
-      <div className="p-8 text-center">
+      <div className="text-center">
         <PageHeader title="Loading Quiz..." /> {/* Use PageHeader even for loading */}
-        <div className="text-gray-500 animate-pulse mt-8">Fetching quiz details...</div>
+        <div className="text-[var(--muted)] animate-pulse mt-8">Fetching quiz details...</div>
       </div>
     );
   }
@@ -47,14 +44,14 @@ function ViewQuiz() {
   // --- Error State ---
   if (error) {
     return (
-      <div className="p-8">
+      <div>
          <PageHeader title="Error" />
-         <div className="text-center text-red-600 bg-red-100 p-4 rounded border border-red-300 mt-8">
+         <Card className="text-center text-[var(--danger)] bg-[rgb(180_35_24_/_0.08)] border-[rgb(180_35_24_/_0.3)] mt-8">
            <p>{error}</p>
            <Link to="/view-quizzes" className="mt-4 inline-block text-blue-600 hover:underline">
              Go back to Quizzes list
            </Link>
-         </div>
+         </Card>
       </div>
     );
   }
@@ -62,14 +59,14 @@ function ViewQuiz() {
   // --- Quiz Not Found State ---
   if (!quiz) {
      return (
-      <div className="p-8">
+      <div>
          <PageHeader title="Quiz Not Found" />
-         <div className="text-center text-gray-500 mt-8">
+         <Card className="text-center text-[var(--muted)] mt-8">
            <p>The quiz you are looking for could not be found.</p>
            <Link to="/view-quizzes" className="mt-4 inline-block text-blue-600 hover:underline">
              Go back to Quizzes list
            </Link>
-         </div>
+         </Card>
       </div>
     );
   }
@@ -91,7 +88,7 @@ function ViewQuiz() {
 
   // --- Main Content ---
   return (
-    <div className="p-8 bg-[#f3f7fb] min-h-full">
+    <div className="min-h-full">
       <CourseHeader
         category="Quiz details"
         title={quiz.title}
@@ -102,7 +99,7 @@ function ViewQuiz() {
       {/* Questions List */}
       <div className="space-y-6"> {/* Add space between question blocks */}
         {quiz.questions?.map((q, index) => (
-          <div key={q._id || index} className="p-6 border border-gray-300 rounded-2xl shadow-sm bg-white"> {/* Added border color, rounded-lg */}
+          <Card key={q._id || index}>
             {/* Question Text */}
             <h2 className="font-semibold text-lg text-[#102a43] mb-3">{index + 1}. {q.questionText}</h2>
 
@@ -160,19 +157,19 @@ function ViewQuiz() {
               </div>
             </details>
 
-          </div> // End Question Block
+          </Card> // End Question Block
         ))}
       </div>
 
       {/* Back Button */}
       <div className="mt-10 text-center"> {/* Increased top margin */}
-        <Link
+        <Button
+          as={Link}
           to="/view-quizzes"
-          className={backButtonClasses} // Apply the consistent primary button style
         >
           <BookOpen className="w-5 h-5" />
           Back to Quizzes
-        </Link>
+        </Button>
       </div>
     </div>
   );

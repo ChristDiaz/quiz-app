@@ -6,6 +6,7 @@ import PageHeader from '../components/PageHeader';
 import CourseHeader from '../components/questions/CourseHeader';
 import QuestionCard from '../components/questions/QuestionCard';
 import { useAuth } from '../context/AuthContext';
+import { Button, Card, Select } from '../components/ui';
 
 const formatQuestionType = (questionType = '') => {
   if (!questionType) return '';
@@ -37,11 +38,6 @@ function Study() {
   const [error, setError] = useState(null); // Used for both list and detail errors
   const [saving, setSaving] = useState(false);
   const shakeTimeoutRef = useRef(null);
-
-  // --- Define Consistent Button Styles ---
-  const primaryButtonClasses = 'inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#2980b9] text-white rounded text-sm hover:bg-[#2573a6] transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2573a6] disabled:opacity-50 disabled:cursor-not-allowed';
-  const secondaryButtonClasses = 'inline-flex items-center justify-center gap-2 px-4 py-2 bg-gray-300 text-gray-800 rounded text-sm hover:bg-gray-400 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 disabled:opacity-50 disabled:cursor-not-allowed';
-  const successButtonClasses = 'inline-flex items-center justify-center gap-2 px-4 py-2 bg-green-500 text-white rounded text-sm hover:bg-green-600 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-600 disabled:opacity-50 disabled:cursor-not-allowed';
 
   // --- Shared correctness check ---
   const isAnswerCorrect = (question, userAnswer) => {
@@ -215,20 +211,25 @@ function Study() {
   // 1. Show selection UI if no quiz ID is set
   if (!selectedQuizId) {
     return (
-      <div className="p-8">
-        <PageHeader title="Study Mode - Select Quiz" />
-        {loading && <p className="text-gray-500 animate-pulse mt-6">Loading available quizzes...</p>}
-        {error && <p className="text-red-600 bg-red-100 p-3 rounded mt-6">{error}</p>}
+      <div>
+        <PageHeader
+          title="Study Mode"
+          subtitle="Select a quiz and start practicing with immediate feedback."
+        />
+        {loading && <p className="text-[var(--muted)] animate-pulse mt-6">Loading available quizzes...</p>}
+        {error && (
+          <Card className="mt-6 text-[var(--danger)] bg-[rgb(180_35_24_/_0.08)] border-[rgb(180_35_24_/_0.3)]">
+            {error}
+          </Card>
+        )}
         {!loading && !error && (
-          <div className="mt-6 max-w-md mx-auto">
-            <label htmlFor="quizSelect" className="block text-sm font-medium text-gray-700 mb-2">
-              Choose a quiz to start studying:
-            </label>
-            <select
+          <Card className="mt-6 max-w-xl mx-auto">
+            <Select
               id="quizSelect"
+              label="Choose a quiz to start studying"
               value={selectedQuizId}
               onChange={handleQuizSelection}
-              className="border border-gray-300 rounded w-full p-2 focus:outline-none focus:ring-2 focus:ring-[#2980b9] focus:border-transparent"
+              hint="You can switch to a different quiz any time after completing the current run."
             >
               <option value="">-- Select a Quiz --</option>
               {availableQuizzes.length > 0 ? (
@@ -240,8 +241,8 @@ function Study() {
               ) : (
                 <option disabled>No quizzes available</option>
               )}
-            </select>
-          </div>
+            </Select>
+          </Card>
         )}
       </div>
     );
@@ -250,9 +251,9 @@ function Study() {
   // 2. Show loading state while fetching the selected quiz
   if (loading) {
     return (
-      <div className="p-8 text-center">
+      <div className="text-center">
         <PageHeader title="Loading Quiz..." />
-        <div className="text-gray-500 animate-pulse mt-8">Fetching quiz details...</div>
+        <div className="text-[var(--muted)] animate-pulse mt-8">Fetching quiz details...</div>
       </div>
     );
   }
@@ -260,14 +261,14 @@ function Study() {
   // 3. Show error state if fetching the selected quiz failed (and not already submitted)
   if (error && !isSubmitted) {
     return (
-      <div className="p-8">
+      <div>
         <PageHeader title="Error Loading Quiz" />
-        <div className="text-center text-red-600 bg-red-100 p-4 rounded border border-red-300 mt-8">
+        <Card className="text-center text-[var(--danger)] bg-[rgb(180_35_24_/_0.08)] border-[rgb(180_35_24_/_0.3)] mt-8">
           <p>{error}</p>
-          <button onClick={resetQuiz} className={`${secondaryButtonClasses} mt-4`}>
+          <Button onClick={resetQuiz} variant="secondary" className="mt-4">
             Select Another Quiz
-          </button>
-        </div>
+          </Button>
+        </Card>
       </div>
     );
   }
@@ -275,29 +276,29 @@ function Study() {
   // 4. Show message if quiz data is somehow still null after loading/no error
   if (!quiz) {
     return (
-      <div className="p-8">
+      <div>
         <PageHeader title="Quiz Not Found" />
-        <div className="text-center text-gray-500 mt-8">
+        <Card className="text-center text-[var(--muted)] mt-8">
           <p>Could not load quiz data.</p>
-          <button onClick={resetQuiz} className={`${secondaryButtonClasses} mt-4`}>
+          <Button onClick={resetQuiz} variant="secondary" className="mt-4">
             Select Another Quiz
-          </button>
-        </div>
+          </Button>
+        </Card>
       </div>
     );
   }
 
   if (!quiz.questions || quiz.questions.length === 0) {
     return (
-      <div className="p-8">
+      <div>
         <CourseHeader
           category="Study mode"
           title={quiz.title}
           subtitle={quiz.description || 'This quiz currently has no questions.'}
         />
-        <div className="max-w-xl mx-auto bg-white p-6 rounded-lg shadow border border-gray-200 text-center text-gray-600">
+        <Card className="max-w-xl mx-auto text-center text-[var(--muted)]">
           No questions are available in this quiz yet.
-        </div>
+        </Card>
       </div>
     );
   }
@@ -381,32 +382,30 @@ function Study() {
 
   const actions = (
     <>
-      <button
-        type="button"
+      <Button
         onClick={goToPreviousQuestion}
         disabled={currentQuestionIndex === 0 || saving}
-        className={secondaryButtonClasses}
+        variant="secondary"
+        className="min-w-[104px]"
       >
         <ArrowLeft className="w-4 h-4" />
         Previous
-      </button>
+      </Button>
 
       {!isCurrentChecked ? (
-        <button
-          type="button"
+        <Button
           onClick={handleCheckCurrentQuestion}
           disabled={saving || !hasCurrentAnswer}
-          className={primaryButtonClasses}
+          className="min-w-[98px]"
         >
           <CheckCircle className="w-4 h-4" />
           Check
-        </button>
+        </Button>
       ) : currentQuestionIndex === quiz.questions.length - 1 ? (
-        <button
-          type="button"
+        <Button
           onClick={handleSubmit}
           disabled={saving}
-          className={successButtonClasses}
+          className="min-w-[124px]"
         >
           {saving ? (
             <>
@@ -422,18 +421,18 @@ function Study() {
               <Send className="w-4 h-4" />
             </>
           )}
-        </button>
+        </Button>
       ) : (
-        <button type="button" onClick={goToNextQuestion} disabled={saving} className={primaryButtonClasses}>
+        <Button onClick={goToNextQuestion} disabled={saving} className="min-w-[92px]">
           Next
           <ArrowRight className="w-4 h-4" />
-        </button>
+        </Button>
       )}
     </>
   );
 
   return (
-    <div className="p-8 bg-[#f3f7fb] min-h-full">
+    <div className="min-h-full">
       <CourseHeader
         category="Study mode"
         title={quiz.title}
@@ -458,18 +457,18 @@ function Study() {
           shakeWrongSelection={shakeQuestionKey === questionKey}
         />
       ) : (
-        <div className="mt-6 max-w-xl mx-auto bg-white p-6 rounded-lg shadow border border-gray-200 text-center">
+        <Card className="mt-6 max-w-xl mx-auto text-center">
           <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-semibold text-gray-800 mb-2">Quiz Completed!</h2>
-          {error && <p className="text-red-600 bg-red-100 p-3 rounded mb-4">{error}</p>}
-          <p className="text-lg text-gray-600 mb-6">
-            Your Score: <span className="font-bold text-xl text-[#2980b9]">{score ?? 'Calculating...'}</span> / {quiz.questions.length}
+          <h2 className="text-2xl font-semibold text-[var(--text)] mb-2">Quiz Completed!</h2>
+          {error && <p className="text-[var(--danger)] bg-[rgb(180_35_24_/_0.08)] p-3 rounded mb-4">{error}</p>}
+          <p className="text-lg text-[var(--muted)] mb-6">
+            Your Score: <span className="font-bold text-xl text-[var(--primary)]">{score ?? 'Calculating...'}</span> / {quiz.questions.length}
           </p>
-          <button onClick={resetQuiz} className={secondaryButtonClasses}>
+          <Button onClick={resetQuiz} variant="secondary">
             <RotateCcw className="w-4 h-4 mr-1" />
             Select Another Quiz
-          </button>
-        </div>
+          </Button>
+        </Card>
       )}
     </div>
   );

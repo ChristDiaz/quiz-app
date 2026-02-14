@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import PageHeader from '../components/PageHeader'; // Import the PageHeader component
+import PageHeader from '../components/PageHeader';
 import QuestionImageLightbox from '../components/QuestionImageLightbox';
 import { apiClient } from '../context/AuthContext';
+import { Button, Card, Input, Select, Textarea } from '../components/ui';
 
 const buildEmptyQuestion = () => ({
   questionType: 'multiple-choice',
@@ -64,20 +65,6 @@ function CreateQuiz() {
   const [generationSuccess, setGenerationSuccess] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
 
-  // --- Define Consistent Button Styles ---
-
-  // Primary (Blue - for Save Quiz)
-  const primaryButtonClasses = "bg-[#2980b9] text-white px-6 py-2 rounded hover:bg-[#2573a6] transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2573a6]";
-
-  // Secondary (Gray - for Add Another Question)
-  const secondaryButtonClasses = "bg-gray-300 text-gray-800 px-4 py-2 rounded hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 transition-colors duration-150";
-
-  // Tertiary Link (Red - for Delete Question)
-  const tertiaryLinkRedClasses = "text-red-600 hover:text-red-800 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 rounded";
-
-  // --- End Button Styles ---
-
-  // --- Event Handlers ---
   const handleQuestionChange = (index, field, value) => {
     const updatedQuestions = [...questions];
     updatedQuestions[index][field] = value;
@@ -86,14 +73,14 @@ function CreateQuiz() {
 
   const handleOptionChange = (qIndex, oIndex, value) => {
     const updatedQuestions = [...questions];
-    // Ensure options array exists
     if (!updatedQuestions[qIndex].options) {
-        updatedQuestions[qIndex].options = [];
+      updatedQuestions[qIndex].options = [];
     }
-    // Pad options array if needed (though initial state should handle this)
+
     while (updatedQuestions[qIndex].options.length <= oIndex) {
-        updatedQuestions[qIndex].options.push('');
+      updatedQuestions[qIndex].options.push('');
     }
+
     updatedQuestions[qIndex].options[oIndex] = value;
     setQuestions(updatedQuestions);
   };
@@ -103,28 +90,21 @@ function CreateQuiz() {
   };
 
   const deleteQuestion = (index) => {
-    // Prevent deleting the last question if desired
-    // if (questions.length <= 1) {
-    //   alert("You must have at least one question.");
-    //   return;
-    // }
     const updatedQuestions = [...questions];
     updatedQuestions.splice(index, 1);
     setQuestions(updatedQuestions);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    // Basic validation example (can be more robust)
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
     if (!title.trim()) {
-        alert("Please enter a quiz title.");
-        return;
+      alert('Please enter a quiz title.');
+      return;
     }
-    // Add more validation as needed for questions/options
 
     try {
       const quizData = { title, description, questions };
-      console.log('Quiz Data to Send:', quizData);
       await apiClient.post('/quizzes', quizData);
 
       setSuccess('✅ Quiz created successfully!');
@@ -134,13 +114,11 @@ function CreateQuiz() {
         setShowSuccess(false);
       }, 3000);
 
-      // Reset form fields
       setTitle('');
       setDescription('');
       setQuestions([buildEmptyQuestion()]);
     } catch (error) {
       console.error('Error creating quiz:', error);
-      // TODO: Show user-friendly error message
       alert(`Error creating quiz: ${error.response?.data?.message || error.message}`);
     }
   };
@@ -159,10 +137,12 @@ function CreateQuiz() {
     const updatedQuestions = [...questions];
     const questionToUpdate = { ...updatedQuestions[qIndex] };
     const currentOptions = questionToUpdate.options || [];
+
     if (currentOptions.length >= 6) {
       alert('Maximum of 6 options allowed.');
       return;
     }
+
     questionToUpdate.options = [...currentOptions, ''];
     updatedQuestions[qIndex] = questionToUpdate;
     setQuestions(updatedQuestions);
@@ -219,6 +199,7 @@ function CreateQuiz() {
       setTitle(generatedQuiz.title || title);
       setDescription(generatedQuiz.description || description);
       setQuestions(generatedQuestions);
+
       const attemptedImageCount = Number(generationMetadata.attemptedImageCount) || 0;
       const generatedImageCount = Number(generationMetadata.generatedImageCount) || 0;
       const attemptedPdfCropCount = Number(generationMetadata.attemptedPdfCropCount) || 0;
@@ -241,9 +222,6 @@ function CreateQuiz() {
     }
   };
 
-  // --- End Event Handlers ---
-
-  // Define Tailwind animation for fade in/out using arbitrary variants
   const successAnimation = `
     animate-[fadeInOut_3s_ease-in-out_forwards]
     keyframes-[fadeInOut]: {
@@ -253,171 +231,138 @@ function CreateQuiz() {
     }
   `;
 
-
   return (
-    <div className="p-8">
-      {/* Use the PageHeader component */}
-      <PageHeader title="Create a New Quiz" />
+    <div>
+      <PageHeader
+        title="Create a New Quiz"
+        subtitle="Build questions manually or generate them from a source document."
+      />
 
-      {/* Success Message */}
       {showSuccess && (
         <div
-          className={`fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded shadow-lg ${successAnimation}`}
-          key={success} // Re-trigger animation if message changes
+          className={`fixed top-4 right-4 bg-[var(--success)] text-white px-6 py-3 rounded shadow-lg ${successAnimation}`}
+          key={success}
         >
           {success}
         </div>
       )}
 
-      <section className="mb-8 border border-gray-300 rounded-lg bg-white shadow-sm p-4 space-y-4">
+      <Card as="section" className="mb-8 space-y-4">
         <div>
-          <h2 className="text-lg font-semibold text-gray-800">Generate Quiz from Document</h2>
-          <p className="text-sm text-gray-600">
+          <h2 className="text-lg font-semibold text-[var(--text)]">Generate Quiz from Document</h2>
+          <p className="text-sm text-[var(--muted)]">
             Upload a document and generate quiz questions automatically with ChatGPT.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="md:col-span-2">
-            <label htmlFor="quizSourceDocument" className="block text-sm font-medium text-gray-700 mb-1">
-              Document
-            </label>
-            <input
-              id="quizSourceDocument"
-              type="file"
-              accept={SUPPORTED_DOCUMENT_FORMATS}
-              onChange={handleDocumentSelection}
-              className="border border-gray-300 rounded w-full p-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#2980b9] focus:border-transparent"
-            />
-            <p className="text-xs text-gray-500 mt-1">Supported formats: txt, md, csv, json, pdf, docx.</p>
-          </div>
+          <Input
+            id="quizSourceDocument"
+            label="Document"
+            type="file"
+            accept={SUPPORTED_DOCUMENT_FORMATS}
+            onChange={handleDocumentSelection}
+            hint="Supported formats: txt, md, csv, json, pdf, docx."
+            wrapperClassName="md:col-span-2"
+            className="text-sm"
+          />
 
-          <div>
-            <label htmlFor="questionCount" className="block text-sm font-medium text-gray-700 mb-1">
-              Question Count
-            </label>
-            <input
-              id="questionCount"
-              type="number"
-              min="1"
-              max="50"
-              value={questionCount}
-              onChange={(event) => setQuestionCount(event.target.value)}
-              className="border border-gray-300 rounded w-full p-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2980b9] focus:border-transparent"
-            />
-          </div>
+          <Input
+            id="questionCount"
+            label="Question Count"
+            type="number"
+            min="1"
+            max="50"
+            value={questionCount}
+            onChange={(event) => setQuestionCount(event.target.value)}
+            className="text-sm"
+          />
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <button
+          <Button
             type="button"
             onClick={handleGenerateFromDocument}
-            className={primaryButtonClasses}
             disabled={isGenerating}
           >
             {isGenerating ? 'Generating...' : 'Generate Quiz'}
-          </button>
+          </Button>
 
-          {generationSuccess && <p className="text-sm text-green-700">{generationSuccess}</p>}
-          {generationError && <p className="text-sm text-red-600">{generationError}</p>}
+          {generationSuccess && <p className="text-sm text-[var(--success)]">{generationSuccess}</p>}
+          {generationError && <p className="text-sm text-[var(--danger)]">{generationError}</p>}
         </div>
-      </section>
+      </Card>
 
-      {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-6">
-
-        {/* Title Input */}
-        <div>
-          <label htmlFor="quizTitle" className="block text-sm font-medium text-gray-700 mb-1">Title</label>
-          <input
+        <Card className="space-y-4">
+          <Input
             id="quizTitle"
-            type="text"
-            className="border border-gray-300 rounded w-full p-2 focus:outline-none focus:ring-2 focus:ring-[#2980b9] focus:border-transparent"
+            label="Title"
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={(event) => setTitle(event.target.value)}
             required
           />
-        </div>
 
-        {/* Description Input */}
-        <div>
-          <label htmlFor="quizDescription" className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-          <textarea
+          <Textarea
             id="quizDescription"
-            className="border border-gray-300 rounded w-full p-2 focus:outline-none focus:ring-2 focus:ring-[#2980b9] focus:border-transparent"
+            label="Description"
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            onChange={(event) => setDescription(event.target.value)}
             rows="3"
           />
-        </div>
+        </Card>
 
-        {/* Questions Loop */}
-        {questions.map((q, qIndex) => (
-          <div key={qIndex} className="border border-gray-300 rounded p-4 space-y-4 bg-white shadow-sm"> {/* Added bg and shadow */}
-
+        {questions.map((question, qIndex) => (
+          <Card key={qIndex} className="space-y-4">
             <div className="flex justify-between items-center">
-                <p className="font-semibold text-lg text-gray-700">Question {qIndex + 1}</p>
-                {/* Delete Button - Placed at top right of question block */}
-                {questions.length > 1 && ( // Only show delete if more than one question exists
-                    <button
-                        type="button"
-                        onClick={() => deleteQuestion(qIndex)}
-                        className={tertiaryLinkRedClasses}
-                    >
-                        Delete Question
-                    </button>
-                )}
+              <p className="font-semibold text-lg text-[var(--text)]">Question {qIndex + 1}</p>
+              {questions.length > 1 && (
+                <Button
+                  type="button"
+                  onClick={() => deleteQuestion(qIndex)}
+                  variant="danger"
+                  size="sm"
+                >
+                  Delete Question
+                </Button>
+              )}
             </div>
 
+            <Select
+              id={`qType-${qIndex}`}
+              label="Question Type"
+              value={question.questionType}
+              onChange={(event) => handleQuestionChange(qIndex, 'questionType', event.target.value)}
+              required
+            >
+              <option value="multiple-choice">Multiple Choice</option>
+              <option value="true-false">True/False</option>
+              <option value="fill-in-the-blank">Fill in the Blank</option>
+              <option value="image-based">Image-Based</option>
+            </Select>
 
-            {/* Question Type Selector */}
-            <div>
-              <label htmlFor={`qType-${qIndex}`} className="block text-sm font-medium text-gray-700 mb-1">Question Type</label>
-              <select
-                id={`qType-${qIndex}`}
-                className="border border-gray-300 rounded w-full p-2 focus:outline-none focus:ring-2 focus:ring-[#2980b9] focus:border-transparent"
-                value={q.questionType}
-                onChange={(e) => handleQuestionChange(qIndex, 'questionType', e.target.value)}
-                required
-              >
-                <option value="multiple-choice">Multiple Choice</option>
-                <option value="true-false">True/False</option>
-                <option value="fill-in-the-blank">Fill in the Blank</option>
-                <option value="image-based">Image-Based</option>
-              </select>
-            </div>
+            <Input
+              id={`qText-${qIndex}`}
+              label="Question Text"
+              value={question.questionText}
+              onChange={(event) => handleQuestionChange(qIndex, 'questionText', event.target.value)}
+              required
+            />
 
-            {/* Question Text Input */}
-            <div>
-              <label htmlFor={`qText-${qIndex}`} className="block text-sm font-medium text-gray-700 mb-1">Question Text</label>
-              <input
-                id={`qText-${qIndex}`}
-                type="text"
-                className="border border-gray-300 rounded w-full p-2 focus:outline-none focus:ring-2 focus:ring-[#2980b9] focus:border-transparent"
-                value={q.questionText}
-                onChange={(e) => handleQuestionChange(qIndex, 'questionText', e.target.value)}
-                required
-              />
-            </div>
-
-            {/* --- Conditional Fields --- */}
-
-            {/* Image URL (for image-based) */}
-            {q.questionType === 'image-based' && (
+            {question.questionType === 'image-based' && (
               <div>
-                <label htmlFor={`qImgUrl-${qIndex}`} className="block text-sm font-medium text-gray-700 mb-1">Image URL <span className="text-xs text-gray-500">(Optional)</span></label>
-                <input
+                <Input
                   id={`qImgUrl-${qIndex}`}
-                  type="text"
-                  className="border border-gray-300 rounded w-full p-2 focus:outline-none focus:ring-2 focus:ring-[#2980b9] focus:border-transparent"
-                  value={q.imageUrl || ''}
+                  label="Image URL"
+                  value={question.imageUrl || ''}
                   placeholder="https://example.com/image.jpg or /generated-media/..."
-                  onChange={(e) => handleQuestionChange(qIndex, 'imageUrl', e.target.value)}
+                  onChange={(event) => handleQuestionChange(qIndex, 'imageUrl', event.target.value)}
+                  hint="Optional. Use this to attach an image to the question."
                 />
-                {/* Optional: Image Preview */}
-                {q.imageUrl && (
+
+                {question.imageUrl && (
                   <QuestionImageLightbox
-                    src={q.imageUrl}
+                    src={question.imageUrl}
                     alt={`Preview for question ${qIndex + 1}`}
                     wrapperClassName="mt-2 inline-block"
                     imageClassName="max-h-40 rounded border border-gray-200"
@@ -426,105 +371,96 @@ function CreateQuiz() {
               </div>
             )}
 
-            {/* Options (for multiple-choice and image-based) */}
-            {(q.questionType === 'multiple-choice' || q.questionType === 'image-based') && (
-              <div className="border-t border-gray-200 pt-4 mt-4 space-y-3">
-                 <label className="block text-sm font-medium text-gray-700 mb-1">Options</label>
+            {(question.questionType === 'multiple-choice' || question.questionType === 'image-based') && (
+              <div className="border-t border-[var(--border)] pt-4 mt-4 space-y-3">
+                <p className="block text-sm font-medium text-[var(--text)]">Options</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3" data-options-for={`question-${qIndex}`}>
-                  {(q.options || []).map((opt, oIndex) => ( // Ensure options exists
+                  {(question.options || []).map((option, oIndex) => (
                     <div key={oIndex}>
-                      <label htmlFor={`q-${qIndex}-opt-${oIndex}`} className="block text-xs text-gray-600 mb-0.5">Option {oIndex + 1}</label>
-                      <input
+                      <Input
                         id={`q-${qIndex}-opt-${oIndex}`}
-                        type="text"
-                        className="border border-gray-300 rounded w-full p-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2980b9] focus:border-transparent"
-                        value={opt}
-                        onChange={(e) => handleOptionChange(qIndex, oIndex, e.target.value)}
-                        required // Options are usually required for MC
+                        label={`Option ${oIndex + 1}`}
+                        className="text-sm"
+                        value={option}
+                        onChange={(event) => handleOptionChange(qIndex, oIndex, event.target.value)}
+                        required
                       />
-                      <button type="button" onClick={() => removeOption(qIndex, oIndex)} className={tertiaryLinkRedClasses + " mt-1"}>Remove Option</button>
+                      <Button
+                        type="button"
+                        onClick={() => removeOption(qIndex, oIndex)}
+                        variant="ghost"
+                        size="sm"
+                        className="mt-1 text-[var(--danger)]"
+                      >
+                        Remove Option
+                      </Button>
                     </div>
                   ))}
                   <div className="sm:col-span-2">
-                    <button type="button" onClick={() => addOption(qIndex)} className={secondaryButtonClasses}>+ Add Option</button>
+                    <Button type="button" onClick={() => addOption(qIndex)} variant="secondary" size="sm">+ Add Option</Button>
                   </div>
                 </div>
-                 {/* Correct Answer Select for MC/Image */}
-                 <div>
-                    <label htmlFor={`qCorrect-${qIndex}`} className="block text-xs text-gray-600 mb-0.5">Correct Answer</label>
-                    <select
-                      id={`qCorrect-${qIndex}`}
-                      className="border border-gray-300 rounded w-full p-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2980b9] focus:border-transparent"
-                      value={q.correctAnswer}
-                      onChange={(e) => handleQuestionChange(qIndex, 'correctAnswer', e.target.value)}
-                      required
-                    >
-                      <option value="">Select Correct Answer</option>
-                      {(q.options || []).map((opt, oIndex) => (
-                        opt && <option key={oIndex} value={opt}>{opt}</option> // Only show non-empty options
-                      ))}
-                    </select>
-                  </div>
+
+                <Select
+                  id={`qCorrect-${qIndex}`}
+                  label="Correct Answer"
+                  className="text-sm"
+                  value={question.correctAnswer}
+                  onChange={(event) => handleQuestionChange(qIndex, 'correctAnswer', event.target.value)}
+                  required
+                >
+                  <option value="">Select Correct Answer</option>
+                  {(question.options || []).map((option, oIndex) => (
+                    option ? <option key={oIndex} value={option}>{option}</option> : null
+                  ))}
+                </Select>
               </div>
             )}
 
-            {/* Correct Answer (for true-false) */}
-            {q.questionType === 'true-false' && (
-              <div className="border-t border-gray-200 pt-4 mt-4">
-                <label htmlFor={`qCorrect-${qIndex}`} className="block text-sm font-medium text-gray-700 mb-1">Correct Answer</label>
-                <select
+            {question.questionType === 'true-false' && (
+              <div className="border-t border-[var(--border)] pt-4 mt-4">
+                <Select
                   id={`qCorrect-${qIndex}`}
-                  className="border border-gray-300 rounded w-full p-2 focus:outline-none focus:ring-2 focus:ring-[#2980b9] focus:border-transparent"
-                  value={q.correctAnswer}
-                  onChange={(e) => handleQuestionChange(qIndex, 'correctAnswer', e.target.value)}
+                  label="Correct Answer"
+                  value={question.correctAnswer}
+                  onChange={(event) => handleQuestionChange(qIndex, 'correctAnswer', event.target.value)}
                   required
                 >
                   <option value="">Select</option>
                   <option value="True">True</option>
                   <option value="False">False</option>
-                </select>
+                </Select>
               </div>
             )}
 
-            {/* Correct Answer (for fill-in-the-blank) */}
-            {q.questionType === 'fill-in-the-blank' && (
-              <div className="border-t border-gray-200 pt-4 mt-4">
-                <label htmlFor={`qCorrect-${qIndex}`} className="block text-sm font-medium text-gray-700 mb-1">Correct Answer(s) <span className="text-xs text-gray-500">(separate multiple with ';')</span></label>
-                <input
+            {question.questionType === 'fill-in-the-blank' && (
+              <div className="border-t border-[var(--border)] pt-4 mt-4">
+                <Input
                   id={`qCorrect-${qIndex}`}
-                  type="text"
-                  className="border border-gray-300 rounded w-full p-2 focus:outline-none focus:ring-2 focus:ring-[#2980b9] focus:border-transparent"
-                  value={q.correctAnswer}
-                  onChange={(e) => handleQuestionChange(qIndex, 'correctAnswer', e.target.value)}
+                  label="Correct Answer(s)"
+                  hint="Separate multiple acceptable answers with ';'."
+                  value={question.correctAnswer}
+                  onChange={(event) => handleQuestionChange(qIndex, 'correctAnswer', event.target.value)}
                   required
                 />
               </div>
             )}
-            {/* --- End Conditional Fields --- */}
-
-          </div> /* End Question Block */
+          </Card>
         ))}
 
-        {/* Form Action Buttons */}
-        <div className="flex items-center gap-4 pt-4 border-t border-gray-200">
-            {/* Add Question Button */}
-            <button
-              type="button"
-              onClick={addQuestion}
-              className={secondaryButtonClasses} // Apply secondary style
-            >
-              + Add Question
-            </button>
+        <Card variant="subtle" className="flex items-center gap-4 pt-4 border-t border-[var(--border)]">
+          <Button
+            type="button"
+            onClick={addQuestion}
+            variant="secondary"
+          >
+            + Add Question
+          </Button>
 
-            {/* Save Quiz Button */}
-            <button
-              type="submit"
-              className={primaryButtonClasses} // Apply primary style
-            >
-              Save Quiz
-            </button>
-        </div>
-
+          <Button type="submit">
+            Save Quiz
+          </Button>
+        </Card>
       </form>
     </div>
   );

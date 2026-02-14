@@ -4,7 +4,8 @@ import { apiClient } from '../context/AuthContext'; // Use apiClient
 import PageHeader from '../components/PageHeader';
 import { Link } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns'; // Use relative dates
-import { ListChecks, AlertCircle, Loader2, CheckCircle, XCircle, Percent, HelpCircle } from 'lucide-react'; // Keep icons
+import { ListChecks, AlertCircle, Loader2 } from 'lucide-react';
+import { Badge, Button, Card } from '../components/ui';
 
 function MyAttempts() {
   const [attempts, setAttempts] = useState([]);
@@ -53,9 +54,9 @@ function MyAttempts() {
   // --- Loading State ---
   if (loading) {
     return (
-      <div className="p-6 md:p-8">
-        <PageHeader title="My Attempts" />
-        <div className="flex justify-center items-center py-10 text-gray-500">
+      <div>
+        <PageHeader title="My Attempts" subtitle="Track quiz history and score trends over time." />
+        <div className="flex justify-center items-center py-10 text-[var(--muted)]">
           <Loader2 className="animate-spin mr-2 h-5 w-5" />
           <span>Loading attempts...</span>
         </div>
@@ -66,34 +67,34 @@ function MyAttempts() {
   // --- Error State ---
   if (error) {
     return (
-      <div className="p-6 md:p-8">
+      <div>
         <PageHeader title="My Attempts" />
-        <div className="mt-8 flex items-center justify-center text-red-600 bg-red-100 p-4 rounded border border-red-300">
+        <Card className="mt-8 flex items-center justify-center text-[var(--danger)] bg-[rgb(180_35_24_/_0.08)] border-[rgb(180_35_24_/_0.3)]">
           <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0" />
           <span>{error}</span>
-        </div>
+        </Card>
       </div>
     );
   }
 
   // --- Main Content ---
   return (
-    <div className="p-6 md:p-8">
-      <PageHeader title="My Attempts" />
+    <div>
+      <PageHeader
+        title="My Attempts"
+        subtitle="Review previous scores and completion times."
+      />
 
       {attempts.length === 0 ? (
         // --- No Attempts Message ---
-        <div className="text-center text-gray-600 mt-12 bg-white p-8 rounded-lg shadow border border-gray-200">
+        <Card className="text-center text-[var(--muted)] mt-12">
           <ListChecks size={48} className="mx-auto text-gray-400 mb-4" />
-          <h3 className="text-xl font-semibold text-gray-700 mb-2">No Attempts Yet</h3>
+          <h3 className="text-xl font-semibold text-[var(--text)] mb-2">No Attempts Yet</h3>
           <p className="text-sm mb-6">You haven't attempted any quizzes. Why not try one now?</p>
-          <Link
-            to="/study" // Link to Study page
-            className="inline-flex items-center px-6 py-2 bg-[#2980b9] text-white rounded-md shadow-sm hover:bg-[#2573a6] transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2573a6]"
-          >
+          <Button as={Link} to="/study">
             Start Studying
-          </Link>
-        </div>
+          </Button>
+        </Card>
       ) : (
         // --- List of Attempts (Using previous working display logic) ---
         <div className="mt-6 space-y-4">
@@ -103,36 +104,34 @@ function MyAttempts() {
             const scoreColor = percentage >= 70 ? 'text-green-600' : percentage >= 40 ? 'text-yellow-600' : 'text-red-600'; // Color based on calculated percentage
 
             return (
-              <div
+              <Card
                 key={attempt._id}
-                className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden transition-shadow hover:shadow-md"
+                className="overflow-hidden transition-shadow hover:shadow-md"
               >
-                <div className="p-4 sm:p-5">
-                  <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
-                    {/* Left Side: Title and Date */}
-                    <div>
-                      <h3 className="text-lg font-semibold text-[#2980b9] truncate" title={attempt.quizTitle}>
-                        {attempt.quizTitle || 'Quiz Title Missing'}
-                      </h3>
-                      <p className="text-sm text-gray-500 mt-1">
-                        {/* Use formatDistanceToNow for relative dates */}
-                        Completed: {formatDistanceToNow(new Date(attempt.completedAt), { addSuffix: true })}
-                      </p>
-                    </div>
-                    {/* Right Side: Score (Count / Total and Percentage) */}
-                    <div className="text-right flex-shrink-0 mt-2 sm:mt-0">
-                      <p className="text-xl font-bold text-gray-700">
-                        {/* Display score as COUNT / TOTAL */}
-                        {attempt.score} / {attempt.totalQuestions}
-                      </p>
-                      <p className={`text-sm font-medium ${scoreColor}`}>
-                        {/* Display calculated percentage */}
-                        ({percentage}%)
-                      </p>
-                    </div>
+                <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+                  {/* Left Side: Title and Date */}
+                  <div>
+                    <h3 className="text-lg font-semibold text-[var(--text)] truncate" title={attempt.quizTitle}>
+                      {attempt.quizTitle || 'Quiz Title Missing'}
+                    </h3>
+                    <p className="text-sm text-[var(--muted)] mt-1">
+                      {/* Use formatDistanceToNow for relative dates */}
+                      Completed: {formatDistanceToNow(new Date(attempt.completedAt), { addSuffix: true })}
+                    </p>
+                  </div>
+                  {/* Right Side: Score (Count / Total and Percentage) */}
+                  <div className="text-right flex-shrink-0 mt-2 sm:mt-0">
+                    <p className="text-xl font-bold text-[var(--text)]">
+                      {/* Display score as COUNT / TOTAL */}
+                      {attempt.score} / {attempt.totalQuestions}
+                    </p>
+                    <Badge className={`mt-1 ${scoreColor}`}>
+                      {/* Display calculated percentage */}
+                      ({percentage}%)
+                    </Badge>
                   </div>
                 </div>
-              </div>
+              </Card>
             );
           })}
         </div>
