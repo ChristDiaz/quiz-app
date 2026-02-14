@@ -1,4 +1,5 @@
 import styles from './CourseHeader.module.css';
+import { Badge } from '../ui';
 
 function CourseHeader({ category, title, subtitle, tags = [] }) {
   const visibleTags = Array.isArray(tags) ? tags.filter(Boolean).slice(0, 6) : [];
@@ -12,9 +13,9 @@ function CourseHeader({ category, title, subtitle, tags = [] }) {
         {visibleTags.length > 0 ? (
           <div className={styles.tags} aria-label="Course topics">
             {visibleTags.map((tag) => (
-              <span key={tag} className={styles.tag}>
+              <Badge key={tag} className={styles.tag}>
                 {tag}
-              </span>
+              </Badge>
             ))}
           </div>
         ) : null}

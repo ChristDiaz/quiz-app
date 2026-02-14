@@ -4,11 +4,11 @@
   grid-template-columns: auto 1fr auto;
   gap: 12px;
   align-items: center;
-  border: 1px solid var(--qc-border, #d9e2ec);
+  border: 1px solid var(--border);
   border-radius: 16px;
   padding: 16px;
-  background: #ffffff;
-  color: var(--qc-text, #102a43);
+  background: var(--surface);
+  color: var(--text);
   cursor: pointer;
   transition:
     transform 160ms ease,
@@ -26,8 +26,8 @@
 }
 
 .optionCard:focus-within {
-  border-color: var(--qc-focus, #20639b);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--qc-focus, #20639b) 28%, transparent);
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 28%, transparent);
 }
 
 .radioInput {
@@ -49,12 +49,12 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #bcccdc;
-  color: #334e68;
+  border: 1px solid var(--border);
+  color: var(--muted);
   font-weight: 700;
   font-size: 0.85rem;
   flex-shrink: 0;
-  background: #f8fbff;
+  background: var(--surface-2);
 }
 
 .choiceText {
@@ -91,20 +91,20 @@
 }
 
 .selected {
-  border-color: var(--qc-primary, #2f78c4);
+  border-color: var(--primary);
   background: #f1f8ff;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--qc-primary, #2f78c4) 24%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 24%, transparent);
 }
 
 .selected .letterBadge {
-  border-color: var(--qc-primary, #2f78c4);
+  border-color: var(--primary);
   color: #1d4f8a;
   background: #e8f2ff;
 }
 
 .submittedCorrect {
-  border-color: var(--qc-success-border, #4db48e);
-  background: var(--qc-success-bg, #edf9f2);
+  border-color: rgb(31 122 77 / 0.35);
+  background: rgb(31 122 77 / 0.1);
 }
 
 .submittedCorrect .letterBadge {
@@ -114,8 +114,8 @@
 }
 
 .submittedIncorrect {
-  border-color: var(--qc-danger-border, #df6f6f);
-  background: var(--qc-danger-bg, #fff3f3);
+  border-color: rgb(180 35 24 / 0.35);
+  background: rgb(180 35 24 / 0.1);
 }
 
 .submittedIncorrect .letterBadge {

@@ -1,6 +1,6 @@
 .panel {
   margin-top: 12px;
-  border-top: 1px solid #d9e2ec;
+  border-top: 1px solid var(--border);
   padding-top: 12px;
 }
 
@@ -9,13 +9,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border: 1px solid #d9e2ec;
+  border: 1px solid var(--border);
   border-radius: 12px;
   padding: 10px 12px;
   font-size: 0.9rem;
   font-weight: 600;
-  color: #243b53;
-  background: #f8fbff;
+  color: var(--text);
+  background: var(--surface-2);
   cursor: pointer;
   transition: border-color 150ms ease, background-color 150ms ease;
 }
@@ -26,7 +26,7 @@
 }
 
 .summaryButton:focus-visible {
-  outline: 2px solid var(--qc-focus, #20639b);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -43,10 +43,10 @@
 
 .content {
   margin-top: 10px;
-  border: 1px solid #d9e2ec;
+  border: 1px solid var(--border);
   border-radius: 12px;
   padding: 12px;
-  background: #ffffff;
+  background: var(--surface);
 }
 
 .row {
@@ -62,7 +62,7 @@
 
 .label {
   font-weight: 700;
-  color: #102a43;
+  color: var(--text);
 }
 
 .value {
@@ -70,5 +70,5 @@
 }
 
 .valueMuted {
-  color: #627d98;
+  color: var(--muted);
 }

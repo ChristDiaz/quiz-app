@@ -1,4 +1,5 @@
 import styles from './QuestionCard.module.css';
+import { Badge } from '../ui';
 
 function CardHeader({ questionNumber, totalQuestions, topicLabel }) {
   const hasTotal = Number.isInteger(totalQuestions) && totalQuestions > 0;
@@ -13,7 +14,7 @@ function CardHeader({ questionNumber, totalQuestions, topicLabel }) {
           Question {questionNumber}
           {hasTotal ? ` of ${totalQuestions}` : ''}
         </p>
-        {topicLabel ? <span className={styles.topicChip}>{topicLabel}</span> : null}
+        {topicLabel ? <Badge className={styles.topicChip}>{topicLabel}</Badge> : null}
       </div>
 
       {hasTotal ? (

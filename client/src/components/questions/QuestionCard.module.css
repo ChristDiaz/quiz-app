@@ -1,29 +1,10 @@
-:global(:root) {
-  --qc-bg: #f3f7fb;
-  --qc-card-bg: #ffffff;
-  --qc-text: #102a43;
-  --qc-muted: #627d98;
-  --qc-border: #d9e2ec;
-  --qc-primary: #2f78c4;
-  --qc-focus: #20639b;
-  --qc-success-bg: #edf9f2;
-  --qc-success-border: #4db48e;
-  --qc-danger-bg: #fff3f3;
-  --qc-danger-border: #df6f6f;
-}
-
 .shell {
   max-width: 900px;
   margin: 0 auto;
 }
 
 .questionCard {
-  border: 1px solid var(--qc-border);
-  border-radius: 16px;
-  background: var(--qc-card-bg);
-  box-shadow: 0 10px 24px rgba(17, 24, 39, 0.08);
-  padding: 24px;
-  color: var(--qc-text);
+  color: var(--text);
 }
 
 .cardHeader {
@@ -45,19 +26,10 @@
   margin: 0;
   font-size: 0.85rem;
   font-weight: 600;
-  color: var(--qc-muted);
+  color: var(--muted);
 }
 
 .topicChip {
-  display: inline-flex;
-  align-items: center;
-  border-radius: 999px;
-  border: 1px solid #c9d7e4;
-  background: #f8fbff;
-  color: #334e68;
-  font-size: 0.75rem;
-  font-weight: 600;
-  padding: 4px 8px;
   text-transform: capitalize;
 }
 
@@ -72,21 +44,21 @@
   margin-bottom: 6px;
   text-align: right;
   font-size: 0.78rem;
-  color: var(--qc-muted);
+  color: var(--muted);
 }
 
 .progressTrack {
   width: 100%;
   height: 6px;
   border-radius: 999px;
-  background: #dce6f0;
+  background: #d7e5f3;
   overflow: hidden;
 }
 
 .progressFill {
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #2f78c4 0%, #59a7f1 100%);
+  background: linear-gradient(90deg, var(--primary) 0%, #59a7f1 100%);
 }
 
 .questionBody {
@@ -98,7 +70,7 @@
   font-size: clamp(1.15rem, 1.5vw, 1.35rem);
   font-weight: 600;
   line-height: 1.45;
-  color: var(--qc-text);
+  color: var(--text);
 }
 
 .questionImageWrapper {
@@ -114,7 +86,7 @@
   max-width: 420px;
   margin: 0 auto;
   border-radius: 12px;
-  border: 1px solid var(--qc-border);
+  border: 1px solid var(--border);
 }
 
 .choicesGrid {
@@ -130,52 +102,52 @@
 
 .fillInWrapper {
   margin-top: 16px;
-  border: 1px solid var(--qc-border);
+  border: 1px solid var(--border);
   border-radius: 16px;
-  background: #f8fbff;
+  background: var(--surface-2);
   padding: 16px;
 }
 
 .fillInLabel {
   display: block;
   margin: 0 0 8px;
-  color: #334e68;
+  color: var(--text);
   font-size: 0.85rem;
   font-weight: 600;
 }
 
 .fillInInput {
   width: 100%;
-  border: 1px solid #bcccdc;
+  border: 1px solid var(--border);
   border-radius: 12px;
   padding: 10px 12px;
   font-size: 0.95rem;
   line-height: 1.4;
-  color: #102a43;
-  background: #fff;
+  color: var(--text);
+  background: var(--surface);
 }
 
 .fillInInput:focus-visible {
-  outline: 2px solid var(--qc-focus);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
-  border-color: var(--qc-focus);
+  border-color: var(--focus);
 }
 
 .fillInInput:disabled {
   background: #f1f5f9;
-  color: #627d98;
+  color: var(--muted);
 }
 
 .fillInHint {
   margin: 8px 0 0;
-  color: var(--qc-muted);
+  color: var(--muted);
   font-size: 0.82rem;
 }
 
 .cardFooter {
   margin-top: 20px;
   padding-top: 16px;
-  border-top: 1px solid var(--qc-border);
+  border-top: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -185,7 +157,7 @@
 
 .helperText {
   margin: 0;
-  color: var(--qc-muted);
+  color: var(--muted);
   font-size: 0.9rem;
 }
 
@@ -197,29 +169,29 @@
 
 .feedbackStrip {
   margin-top: 12px;
-  border: 1px solid var(--qc-border);
+  border: 1px solid var(--border);
   border-radius: 12px;
   min-height: 64px;
   padding: 10px 12px;
   display: flex;
   gap: 10px;
   align-items: flex-start;
-  background: #f8fbff;
+  background: var(--surface-2);
 }
 
 .feedbackCorrect {
-  background: var(--qc-success-bg);
-  border-color: var(--qc-success-border);
+  background: rgb(31 122 77 / 0.1);
+  border-color: rgb(31 122 77 / 0.35);
 }
 
 .feedbackIncorrect {
-  background: var(--qc-danger-bg);
-  border-color: var(--qc-danger-border);
+  background: rgb(180 35 24 / 0.1);
+  border-color: rgb(180 35 24 / 0.35);
 }
 
 .feedbackNeutral {
-  background: #f8fbff;
-  border-color: var(--qc-border);
+  background: var(--surface-2);
+  border-color: var(--border);
 }
 
 .feedbackPlaceholder {
@@ -255,12 +227,12 @@
   margin: 0;
   font-size: 0.88rem;
   font-weight: 700;
-  color: #102a43;
+  color: var(--text);
 }
 
 .feedbackMessage {
   margin: 2px 0 0;
-  color: #334e68;
+  color: var(--muted);
   font-size: 0.9rem;
   line-height: 1.4;
 }

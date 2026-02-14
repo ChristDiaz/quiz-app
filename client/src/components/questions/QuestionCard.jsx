@@ -3,6 +3,7 @@ import CardHeader from './CardHeader';
 import ChoiceOption from './ChoiceOption';
 import ExplanationPanel from './ExplanationPanel';
 import QuestionImageLightbox from '../QuestionImageLightbox';
+import { Card } from '../ui';
 import styles from './QuestionCard.module.css';
 
 const CHOICE_QUESTION_TYPES = new Set(['multiple-choice', 'image-based', 'true-false']);
@@ -66,7 +67,7 @@ function QuestionCard({
 
   return (
     <section className={styles.shell}>
-      <article className={styles.questionCard}>
+      <Card as="article" className={styles.questionCard}>
         <CardHeader
           questionNumber={questionIndex + 1}
           totalQuestions={totalQuestions}
@@ -164,7 +165,7 @@ function QuestionCard({
           reference={referenceText}
           defaultExpanded={Boolean(isChecked && !isAnswerCorrect)}
         />
-      </article>
+      </Card>
     </section>
   );
 }
