@@ -74,7 +74,7 @@ function App() {
   // Initial Auth Loading Indicator
   if (isAuthLoading) {
       return (
-          <div className="flex justify-center items-center h-screen bg-gray-100">
+          <div className="flex justify-center items-center h-screen bg-[var(--bg)]">
               <p className="text-gray-500 animate-pulse text-lg">Loading Application...</p>
           </div>
       );
@@ -96,7 +96,7 @@ function App() {
 
   // --- RENDER FULL LAYOUT WITH SIDEBAR WHEN LOGGED IN ---
   return (
-    <div className="h-screen w-full flex bg-gray-100 overflow-hidden">
+    <div className="h-screen w-full flex bg-[var(--bg)] overflow-hidden">
       {/* Sidebar */}
       <aside
         ref={sidebarRef}
@@ -158,10 +158,10 @@ function App() {
 
       {/* Main content (Only shown when logged in) */}
       <main
-        className="flex-1 min-w-0 overflow-y-auto transition-[margin-left] duration-300 ease-in-out"
+        className="flex-1 min-w-0 overflow-y-auto bg-transparent transition-[margin-left] duration-300 ease-in-out"
         style={{ marginLeft: mainContentMargin }}
       >
-        <div className="p-6">
+        <div className="app-main-wrap">
           <Routes>
             {/* Public Routes accessible when logged in (e.g., Dashboard) */}
             {/* Redirect root path to dashboard when logged in */}
